@@ -129,7 +129,7 @@ export const LandingPage = () => {
       </section>
 
       {/* Monitoring workflow */}
-      <section className="arch-section">
+      <section className="arch-section" id="architecture">
         <div className="arch-header">
           <span className="arch-pill">One monitoring workspace</span>
           <h2 className="section-title">A clear picture of service health.</h2>
@@ -168,7 +168,7 @@ export const LandingPage = () => {
       </section>
 
       {/* Multi-protocol overview */}
-      <section className="interactive-tabs-section">
+      <section className="interactive-tabs-section" id="features">
         <div className="text-center mb-6">
           <h2 className="section-title">Checks that fit your stack.</h2>
           <p className="section-subtitle">

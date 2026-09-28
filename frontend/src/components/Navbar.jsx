@@ -19,39 +19,70 @@ export const Navbar = ({ onOpenAddModal }) => {
     <nav className="nav-container">
       <div className="nav-inner">
         {/* Brand */}
-        <Link to="/" className="brand-logo">
-          <div className="logo-icon-wrap">
-            <Activity size={20} className="logo-icon" />
-          </div>
-          <span className="brand-name">
-            Pulse<span className="brand-accent">Grid</span>
-          </span>
-          <span className="brand-badge">SaaS</span>
-        </Link>
+        <div className="brand-group">
+          <Link to="/" className="brand-logo">
+            <div className="logo-icon-wrap">
+              <Activity size={20} className="logo-icon" />
+            </div>
+            <span className="brand-name">
+              Pulse<span className="brand-accent">Grid</span>
+            </span>
+          </Link>
+          {location.pathname === '/dashboard' && (
+            <span className="brand-badge">Console</span>
+          )}
+        </div>
 
         {/* Center Links */}
         {!isAuthPage && (
           <div className="nav-links">
-            <Link
-              to="/"
-              className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
-            >
-              Product
-            </Link>
-            {user && (
-              <Link
-                to="/dashboard"
-                className={`nav-link ${location.pathname === '/dashboard' ? 'active' : ''}`}
-              >
-                Dashboard
-              </Link>
+            {location.pathname === '/dashboard' ? (
+              <>
+                <Link
+                  to="/dashboard"
+                  className={`nav-link ${location.pathname === '/dashboard' ? 'active' : ''}`}
+                >
+                  Monitors
+                </Link>
+                <Link
+                  to="/status"
+                  className="nav-link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Public Status ↗
+                </Link>
+              </>
+            ) : location.pathname === '/status' ? (
+              <>
+                <Link to="/" className="nav-link">
+                  Overview
+                </Link>
+                <Link to="/status" className={`nav-link active`}>
+                  System Status
+                </Link>
+                {user && (
+                  <Link to="/dashboard" className="nav-link">
+                    Console
+                  </Link>
+                )}
+              </>
+            ) : (
+              <>
+                <a href="#features" className="nav-link">
+                  Features
+                </a>
+                <a href="#architecture" className="nav-link">
+                  How it Works
+                </a>
+                <Link
+                  to="/status"
+                  className={`nav-link ${location.pathname === '/status' ? 'active' : ''}`}
+                >
+                  Live Status
+                </Link>
+              </>
             )}
-            <Link
-              to="/status"
-              className={`nav-link ${location.pathname === '/status' ? 'active' : ''}`}
-            >
-              Status
-            </Link>
           </div>
         )}
 
@@ -85,10 +116,16 @@ export const Navbar = ({ onOpenAddModal }) => {
             </Link>
           ) : user ? (
             <>
-              <button className="btn-primary" onClick={onOpenAddModal}>
-                <Plus size={16} />
-                <span>Add monitor</span>
-              </button>
+              {location.pathname === '/dashboard' ? (
+                <button className="btn-primary" onClick={onOpenAddModal}>
+                  <Plus size={16} />
+                  <span>Add monitor</span>
+                </button>
+              ) : (
+                <Link to="/dashboard" className="btn-primary">
+                  <span>Dashboard →</span>
+                </Link>
+              )}
               <div className="user-profile-wrap">
                 <button
                   className="user-profile-btn"

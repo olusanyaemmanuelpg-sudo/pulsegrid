@@ -40,6 +40,12 @@
   justify-content: space-between;
 }
 
+.brand-group {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
 .brand-logo {
   display: flex;
   align-items: center;
