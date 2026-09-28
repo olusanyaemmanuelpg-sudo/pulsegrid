@@ -17,7 +17,7 @@
   color-scheme: light;
 }
 
-[data-theme="dark"] {
+[data-theme='dark'] {
   --bg-primary: #111612;
   --bg-secondary: #191f1a;
   --bg-card: #202821;
@@ -47,10 +47,13 @@ body {
   min-height: 100vh;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
-code, pre {
+code,
+pre {
   font-family: 'IBM Plex Mono', monospace;
 }
 
@@ -64,11 +67,16 @@ a {
   text-decoration: none;
 }
 
-button, input, select {
+button,
+input,
+select {
   font: inherit;
 }
 
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--accent-green) 55%, transparent);
   outline-offset: 2px;
 }

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router';
-import { Activity, Plus, Sun, Moon, Github, User, Bell } from './Icons';
+import { Activity, Plus, Sun, Moon } from './Icons';
 import { useMonitors } from '../context/MonitorContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 
-export const Navbar = ({ onOpenAddModal, onOpenAuthModal }) => {
+export const Navbar = ({ onOpenAddModal }) => {
   const location = useLocation();
   const { metrics } = useMonitors();
   const { theme, toggleTheme } = useTheme();
@@ -13,6 +13,7 @@ export const Navbar = ({ onOpenAddModal, onOpenAuthModal }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   const isOperational = metrics.down === 0;
+  const isAuthPage = location.pathname === '/login';
 
   return (
     <nav className="nav-container">
@@ -29,34 +30,44 @@ export const Navbar = ({ onOpenAddModal, onOpenAuthModal }) => {
         </Link>
 
         {/* Center Links */}
-        <div className="nav-links">
-          <Link
-            to="/"
-            className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
-          >
-            Overview
-          </Link>
-          <Link
-            to="/dashboard"
-            className={`nav-link ${location.pathname === '/dashboard' ? 'active' : ''}`}
-          >
-            Dashboard
-          </Link>
-          <Link
-            to="/status"
-            className={`nav-link ${location.pathname === '/status' ? 'active' : ''}`}
-          >
-            Status Page
-          </Link>
-        </div>
+        {!isAuthPage && (
+          <div className="nav-links">
+            <Link
+              to="/"
+              className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
+            >
+              Product
+            </Link>
+            {user && (
+              <Link
+                to="/dashboard"
+                className={`nav-link ${location.pathname === '/dashboard' ? 'active' : ''}`}
+              >
+                Dashboard
+              </Link>
+            )}
+            <Link
+              to="/status"
+              className={`nav-link ${location.pathname === '/status' ? 'active' : ''}`}
+            >
+              Status
+            </Link>
+          </div>
+        )}
 
         {/* Right Actions */}
         <div className="nav-actions">
           {/* Status pill */}
-          <div className={`status-pill ${isOperational ? 'up' : 'down'}`}>
-            <span className="pulse-dot"></span>
-            <span>{isOperational ? 'All Systems 100%' : `${metrics.down} Outage`}</span>
-          </div>
+          {!isAuthPage && location.pathname !== '/' && (
+            <div className={`status-pill ${isOperational ? 'up' : 'down'}`}>
+              <span className="pulse-dot"></span>
+              <span>
+                {isOperational
+                  ? 'All systems operational'
+                  : `${metrics.down} service issue`}
+              </span>
+            </div>
+          )}
 
           {/* Theme Switcher Toggle */}
           <button
@@ -68,75 +79,71 @@ export const Navbar = ({ onOpenAddModal, onOpenAuthModal }) => {
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
-          {/* GitHub Star Pill */}
-          <a
-            href="https://github.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-github-pill"
-            title="Star PulseGrid on GitHub"
-          >
-            <Github size={15} />
-            <span className="star-count">★ 1.4k</span>
-          </a>
-
-          {/* Add Monitor CTA */}
-          <button className="btn-primary" onClick={onOpenAddModal}>
-            <Plus size={16} />
-            <span>Add Monitor</span>
-          </button>
-
-          {/* User Auth or Profile */}
-          {user ? (
-            <div className="user-profile-wrap">
-              <button
-                className="user-profile-btn"
-                onClick={() => setShowUserMenu(!showUserMenu)}
-              >
-                <div className="user-avatar-circle">
-                  {user.name.charAt(0).toUpperCase()}
-                </div>
-                <span className="user-name-text">{user.name}</span>
+          {isAuthPage ? (
+            <Link to="/" className="btn-secondary">
+              Back to home
+            </Link>
+          ) : user ? (
+            <>
+              <button className="btn-primary" onClick={onOpenAddModal}>
+                <Plus size={16} />
+                <span>Add monitor</span>
               </button>
-
-              {showUserMenu && (
-                <div className="user-dropdown-menu">
-                  <div className="dropdown-user-info">
-                    <strong>{user.name}</strong>
-                    <span className="dropdown-role">{user.role}</span>
+              <div className="user-profile-wrap">
+                <button
+                  className="user-profile-btn"
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                >
+                  <div className="user-avatar-circle">
+                    {user.name.charAt(0).toUpperCase()}
                   </div>
-                  <div className="dropdown-divider"></div>
-                  <Link
-                    to="/dashboard"
-                    className="dropdown-item"
-                    onClick={() => setShowUserMenu(false)}
-                  >
-                    Console Overview
-                  </Link>
-                  <Link
-                    to="/status"
-                    className="dropdown-item"
-                    onClick={() => setShowUserMenu(false)}
-                  >
-                    Public Status Page
-                  </Link>
-                  <div className="dropdown-divider"></div>
-                  <button
-                    className="dropdown-item text-red"
-                    onClick={() => {
-                      logout();
-                      setShowUserMenu(false);
-                    }}
-                  >
-                    Sign Out
-                  </button>
-                </div>
-              )}
-            </div>
+                  <span className="user-name-text">{user.name}</span>
+                </button>
+
+                {showUserMenu && (
+                  <div className="user-dropdown-menu">
+                    <div className="dropdown-user-info">
+                      <strong>{user.name}</strong>
+                      <span className="dropdown-role">{user.role}</span>
+                    </div>
+                    <div className="dropdown-divider"></div>
+                    <Link
+                      to="/dashboard"
+                      className="dropdown-item"
+                      onClick={() => setShowUserMenu(false)}
+                    >
+                      Console Overview
+                    </Link>
+                    <Link
+                      to="/status"
+                      className="dropdown-item"
+                      onClick={() => setShowUserMenu(false)}
+                    >
+                      Public Status Page
+                    </Link>
+                    <div className="dropdown-divider"></div>
+                    <button
+                      className="dropdown-item text-red"
+                      onClick={() => {
+                        logout();
+                        setShowUserMenu(false);
+                      }}
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
-            <button className="btn-secondary" onClick={onOpenAuthModal}>
-              Sign In
-            </button>
+            <>
+              <Link to="/login" className="btn-secondary nav-signin">
+                Sign in
+              </Link>
+              <Link to="/login?mode=signup" className="btn-primary nav-signup">
+                <span>Create account</span>
+              </Link>
+            </>
           )}
         </div>
       </div>

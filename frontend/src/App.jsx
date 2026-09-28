@@ -1,39 +1,49 @@
 import React, { useState } from 'react';
-import { Routes, Route } from 'react-router';
+import { Navigate, Routes, Route, useLocation } from 'react-router';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { MonitorProvider } from './context/MonitorContext';
 import { Navbar } from './components/Navbar';
 import { AddMonitorModal } from './components/AddMonitorModal';
-import { AuthModal } from './components/AuthModal';
 import { LandingPage } from './pages/LandingPage';
+import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { StatusPage } from './pages/StatusPage';
+import { useAuth } from './context/AuthContext';
 import './App.css';
+
+const ProtectedDashboard = ({ onOpenAddModal }) => {
+  const { user } = useAuth();
+  const location = useLocation();
+
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  return <DashboardPage onOpenAddModal={onOpenAddModal} />;
+};
 
 function App() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   return (
     <ThemeProvider>
       <AuthProvider>
         <MonitorProvider>
           <div className="app-layout">
-            <Navbar
-              onOpenAddModal={() => setIsAddModalOpen(true)}
-              onOpenAuthModal={() => setIsAuthModalOpen(true)}
-            />
+            <Navbar onOpenAddModal={() => setIsAddModalOpen(true)} />
 
             <main className="main-content">
               <Routes>
-                <Route
-                  path="/"
-                  element={<LandingPage onOpenAddModal={() => setIsAddModalOpen(true)} />}
-                />
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/login" element={<LoginPage />} />
                 <Route
                   path="/dashboard"
-                  element={<DashboardPage onOpenAddModal={() => setIsAddModalOpen(true)} />}
+                  element={
+                    <ProtectedDashboard
+                      onOpenAddModal={() => setIsAddModalOpen(true)}
+                    />
+                  }
                 />
                 <Route path="/status" element={<StatusPage />} />
               </Routes>
@@ -42,11 +52,6 @@ function App() {
             <AddMonitorModal
               isOpen={isAddModalOpen}
               onClose={() => setIsAddModalOpen(false)}
-            />
-
-            <AuthModal
-              isOpen={isAuthModalOpen}
-              onClose={() => setIsAuthModalOpen(false)}
             />
           </div>
         </MonitorProvider>
