@@ -12,8 +12,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Download,
-  RefreshCw,
-  Sparkles
+  RefreshCw
 } from '../components/Icons';
 
 export const DashboardPage = ({ onOpenAddModal }) => {

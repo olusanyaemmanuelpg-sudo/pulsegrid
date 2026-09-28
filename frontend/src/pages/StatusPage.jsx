@@ -1,6 +1,6 @@
 import React from 'react';
 import { useMonitors } from '../context/MonitorContext';
-import { CheckCircle, AlertTriangle, Globe, Database, Server, Clock, Shield } from '../components/Icons';
+import { CheckCircle, AlertTriangle, Globe, Database, Server, Clock } from '../components/Icons';
 
 export const StatusPage = () => {
   const { monitors, metrics } = useMonitors();

@@ -9,6 +9,7 @@ import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { StatusPage } from './pages/StatusPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { useAuth } from './context/AuthContext';
 import './App.css';
 
@@ -46,6 +47,7 @@ function App() {
                   }
                 />
                 <Route path="/status" element={<StatusPage />} />
+                <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </main>
 

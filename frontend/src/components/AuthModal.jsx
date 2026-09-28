@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Github, Shield, Sparkles, User } from './Icons';
+import { Github, Sparkles, User } from './Icons';
 import { useAuth } from '../context/AuthContext';
 
 export const AuthModal = ({ isOpen, onClose }) => {

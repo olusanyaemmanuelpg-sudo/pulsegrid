@@ -10,6 +10,9 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
   const [interval, setInterval] = useState(30);
   const [keyword, setKeyword] = useState('');
   const [copied, setCopied] = useState(false);
+  const [cronToken] = useState(() => Math.random().toString(36).substring(2, 7));
+
+  const generatedCronUrl = `https://pulsegrid.dev/ping/${name ? name.toLowerCase().replace(/[^a-z0-9]/g, '-') : 'my-cron'}-${cronToken}`;
 
   if (!isOpen) return null;
 
@@ -19,7 +22,7 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
 
     let finalTarget = target;
     if (monitorType === 'cron') {
-      finalTarget = `https://pulsegrid.dev/ping/${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Math.random().toString(36).substring(2, 7)}`;
+      finalTarget = generatedCronUrl;
     }
 
     addMonitor({
@@ -36,8 +39,6 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
     setKeyword('');
     onClose();
   };
-
-  const generatedCronUrl = `https://pulsegrid.dev/ping/${name ? name.toLowerCase().replace(/[^a-z0-9]/g, '-') : 'my-cron'}-${Math.random().toString(36).substring(2, 7)}`;
 
   const handleCopyCron = () => {
     navigator.clipboard.writeText(`curl -fsS ${generatedCronUrl}`);
