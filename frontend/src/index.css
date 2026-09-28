@@ -1,44 +1,38 @@
 :root {
-  --bg-primary: #0a0d14;
-  --bg-secondary: #121824;
-  --bg-card: #182234;
-  --border-color: #24324a;
-  
-  --text-main: #f3f4f6;
-  --text-muted: #9ca3af;
-  --text-dim: #6b7280;
-
-  --accent-green: #10b981;
-  --accent-green-bg: rgba(16, 185, 129, 0.12);
-  --accent-red: #ef4444;
-  --accent-red-bg: rgba(239, 68, 68, 0.12);
-  --accent-yellow: #f59e0b;
-  --accent-yellow-bg: rgba(245, 158, 11, 0.12);
-  --accent-blue: #3b82f6;
-
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  color-scheme: dark;
+  --bg-primary: #f4f5f1;
+  --bg-secondary: #ffffff;
+  --bg-card: #f8f9f6;
+  --border-color: #e1e5dd;
+  --text-main: #1c2520;
+  --text-muted: #69766e;
+  --text-dim: #929b94;
+  --accent-green: #5d9d32;
+  --accent-green-bg: #eff7e8;
+  --accent-red: #c45448;
+  --accent-red-bg: #fbefed;
+  --accent-yellow: #a7771c;
+  --accent-yellow-bg: #fbf4e4;
+  --accent-blue: #407b99;
+  font-family: 'Manrope', sans-serif;
+  color-scheme: light;
 }
 
-[data-theme="light"] {
-  --bg-primary: #f8fafc;
-  --bg-secondary: #ffffff;
-  --bg-card: #f1f5f9;
-  --border-color: #e2e8f0;
-  
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --text-dim: #94a3b8;
-
-  --accent-green: #059669;
-  --accent-green-bg: rgba(5, 150, 105, 0.1);
-  --accent-red: #dc2626;
-  --accent-red-bg: rgba(220, 38, 38, 0.1);
-  --accent-yellow: #d97706;
-  --accent-yellow-bg: rgba(217, 119, 6, 0.1);
-  --accent-blue: #2563eb;
-
-  color-scheme: light;
+[data-theme="dark"] {
+  --bg-primary: #111612;
+  --bg-secondary: #191f1a;
+  --bg-card: #202821;
+  --border-color: #303b33;
+  --text-main: #edf2eb;
+  --text-muted: #a6b1a8;
+  --text-dim: #7a887d;
+  --accent-green: #a7d875;
+  --accent-green-bg: #26351f;
+  --accent-red: #ef897c;
+  --accent-red-bg: #3a2421;
+  --accent-yellow: #e9c36b;
+  --accent-yellow-bg: #382f1b;
+  --accent-blue: #85b9d2;
+  color-scheme: dark;
 }
 
 * {
@@ -48,16 +42,16 @@
 }
 
 body {
-  background-color: var(--bg-primary);
+  background: var(--bg-primary);
   color: var(--text-main);
   min-height: 100vh;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  transition: background-color 0.25s ease, color 0.25s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 code, pre {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
 }
 
 button {
@@ -68,4 +62,13 @@ button {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+button, input, select {
+  font: inherit;
+}
+
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent-green) 55%, transparent);
+  outline-offset: 2px;
 }
