@@ -1,12 +1,27 @@
 import React, { useState } from 'react';
 import { useMonitors } from '../context/MonitorContext';
+import { useAuth } from '../context/AuthContext';
 import { MonitorCard } from '../components/MonitorCard';
-import { Activity, Globe, Database, Server, Clock, Plus, AlertTriangle, CheckCircle } from '../components/Icons';
+import {
+  Activity,
+  Globe,
+  Database,
+  Server,
+  Clock,
+  Plus,
+  AlertTriangle,
+  CheckCircle,
+  Download,
+  RefreshCw,
+  Sparkles
+} from '../components/Icons';
 
 export const DashboardPage = ({ onOpenAddModal }) => {
-  const { monitors, metrics } = useMonitors();
+  const { monitors, metrics, testMonitor } = useMonitors();
+  const { user } = useAuth();
   const [filterType, setFilterType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
 
   const filteredMonitors = monitors.filter((m) => {
     const matchesType =
@@ -23,19 +38,80 @@ export const DashboardPage = ({ onOpenAddModal }) => {
     return matchesType && matchesQuery;
   });
 
+  const handleExportCSV = () => {
+    setIsExporting(true);
+    setTimeout(() => {
+      const csvContent =
+        'data:text/csv;charset=utf-8,' +
+        'ID,Name,Type,Target,Status,Latency_ms,Uptime_90d\n' +
+        monitors
+          .map(
+            (m) =>
+              `${m.id},"${m.name}",${m.type},"${m.target}",${m.status},${m.latency},${m.uptime90d}%`
+          )
+          .join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `pulsegrid-telemetry-${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setIsExporting(false);
+    }, 500);
+  };
+
+  const handleTestAll = () => {
+    monitors.forEach((m) => testMonitor(m.id));
+  };
+
   return (
     <div className="dashboard-container">
+      {/* Dashboard Top Header */}
+      <div className="dashboard-header-row">
+        <div>
+          <div className="project-breadcrumb">
+            <span className="project-tag">Project</span>
+            <span className="project-name">
+              {user ? `${user.name}'s Cluster` : 'Production Workload (Primary)'}
+            </span>
+            <span className="cluster-region">Region: eu-west-1 • 3 Nodes</span>
+          </div>
+          <h1 className="dashboard-title">Infrastructure Overview</h1>
+        </div>
+
+        <div className="dashboard-header-actions">
+          <button className="btn-secondary" onClick={handleTestAll} title="Ping all monitors">
+            <RefreshCw size={15} />
+            <span>Test All Probes</span>
+          </button>
+          <button
+            className="btn-secondary"
+            onClick={handleExportCSV}
+            disabled={isExporting}
+            title="Download Telemetry CSV"
+          >
+            <Download size={15} />
+            <span>{isExporting ? 'Exporting...' : 'Export CSV'}</span>
+          </button>
+          <button className="btn-primary" onClick={onOpenAddModal}>
+            <Plus size={16} />
+            <span>New Monitor</span>
+          </button>
+        </div>
+      </div>
+
       {/* Top Banner / Metrics Overview */}
       <div className="metrics-row">
         <div className="metric-card">
           <div className="metric-header">
-            <span className="metric-title">Total Monitors</span>
+            <span className="metric-title">Active Probes</span>
             <Activity size={18} className="metric-icon" />
           </div>
           <div className="metric-number-row">
             <span className="metric-big-number">{metrics.total}</span>
             <span className="metric-subtext">
-              <span className="text-green font-bold">{metrics.up} Up</span> •{' '}
+              <span className="text-green font-bold">{metrics.up} Operational</span> •{' '}
               <span className={metrics.down > 0 ? 'text-red font-bold' : 'text-muted'}>
                 {metrics.down} Down
               </span>
@@ -45,12 +121,12 @@ export const DashboardPage = ({ onOpenAddModal }) => {
 
         <div className="metric-card">
           <div className="metric-header">
-            <span className="metric-title">90-Day Uptime</span>
+            <span className="metric-title">System Uptime</span>
             <CheckCircle size={18} className="metric-icon text-green" />
           </div>
           <div className="metric-number-row">
             <span className="metric-big-number text-green">{metrics.uptime}%</span>
-            <span className="metric-subtext">Consensus verified</span>
+            <span className="metric-subtext font-mono text-green">Target: 99.9% SLA</span>
           </div>
         </div>
 
@@ -67,19 +143,19 @@ export const DashboardPage = ({ onOpenAddModal }) => {
               {metrics.down}
             </span>
             <span className="metric-subtext">
-              {metrics.down === 0 ? 'No incidents active' : 'Attention required'}
+              {metrics.down === 0 ? 'Zero service interruption' : 'Degraded services'}
             </span>
           </div>
         </div>
 
         <div className="metric-card">
           <div className="metric-header">
-            <span className="metric-title">Avg Latency</span>
+            <span className="metric-title">Cluster Latency</span>
             <Clock size={18} className="metric-icon" />
           </div>
           <div className="metric-number-row">
             <span className="metric-big-number">{metrics.avgLatency} ms</span>
-            <span className="metric-subtext">Across active worker nodes</span>
+            <span className="metric-subtext">Consensus roundtrip</span>
           </div>
         </div>
       </div>
@@ -91,7 +167,7 @@ export const DashboardPage = ({ onOpenAddModal }) => {
             className={`filter-chip ${filterType === 'all' ? 'active' : ''}`}
             onClick={() => setFilterType('all')}
           >
-            All ({monitors.length})
+            All Monitors ({monitors.length})
           </button>
           <button
             className={`filter-chip ${filterType === 'http' ? 'active' : ''}`}
@@ -119,7 +195,7 @@ export const DashboardPage = ({ onOpenAddModal }) => {
             onClick={() => setFilterType('cron')}
           >
             <Clock size={14} />
-            <span>Cron Heartbeats</span>
+            <span>Crons</span>
           </button>
         </div>
 
@@ -127,14 +203,10 @@ export const DashboardPage = ({ onOpenAddModal }) => {
           <input
             type="text"
             className="search-input"
-            placeholder="Filter by name or URL..."
+            placeholder="Search probes by name or target..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
-          <button className="btn-primary" onClick={onOpenAddModal}>
-            <Plus size={16} />
-            <span>New Monitor</span>
-          </button>
         </div>
       </div>
 
@@ -145,8 +217,8 @@ export const DashboardPage = ({ onOpenAddModal }) => {
         ) : (
           <div className="empty-state">
             <Activity size={40} className="empty-icon" />
-            <h3>No monitors found</h3>
-            <p>Try adjusting your search filter or add a new infrastructure monitor.</p>
+            <h3>No monitors match your filter</h3>
+            <p>Try searching for a different keyword or create a new infrastructure check.</p>
             <button className="btn-primary mt-4" onClick={onOpenAddModal}>
               <Plus size={16} />
               <span>Create Monitor</span>

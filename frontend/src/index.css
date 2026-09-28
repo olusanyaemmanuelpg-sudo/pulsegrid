@@ -3,7 +3,7 @@
   --bg-secondary: #121824;
   --bg-card: #182234;
   --border-color: #24324a;
-
+  
   --text-main: #f3f4f6;
   --text-muted: #9ca3af;
   --text-dim: #6b7280;
@@ -16,12 +16,29 @@
   --accent-yellow-bg: rgba(245, 158, 11, 0.12);
   --accent-blue: #3b82f6;
 
-  font-family:
-    'Inter',
-    system-ui,
-    -apple-system,
-    sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-card: #f1f5f9;
+  --border-color: #e2e8f0;
+  
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --text-dim: #94a3b8;
+
+  --accent-green: #059669;
+  --accent-green-bg: rgba(5, 150, 105, 0.1);
+  --accent-red: #dc2626;
+  --accent-red-bg: rgba(220, 38, 38, 0.1);
+  --accent-yellow: #d97706;
+  --accent-yellow-bg: rgba(217, 119, 6, 0.1);
+  --accent-blue: #2563eb;
+
+  color-scheme: light;
 }
 
 * {
@@ -36,10 +53,10 @@ body {
   min-height: 100vh;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-code,
-pre {
+code, pre {
   font-family: 'JetBrains Mono', monospace;
 }
 
