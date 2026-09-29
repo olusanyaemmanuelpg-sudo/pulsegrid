@@ -1,12 +1,14 @@
 import express from 'express';
 import cors from 'cors';
-import { configDotenv } from 'dotenv';
-configDotenv();
+import dotenv from 'dotenv';
+import { query } from './config/db.js';
+import { initDb } from './model/initDb.js';
+dotenv.config();
 
 const app = express();
 const port = process.env.PORT;
 app.use(cors());
-app.use(express.json()); // Essential: enables req.body JSON parsing!
+app.use(express.json());
 
 // Base Health Check
 app.get('/api/health', (req, res) => {
@@ -17,6 +19,14 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+initDb();
+
 app.listen(port, () => {
   console.log(`🚀 PulseGrid API listening at http://localhost:${port}`);
+
+  query('SELECT 1')
+    .then(() => console.log('Database connected'))
+    .catch((error) =>
+      console.error('Database connection failed:', error.message),
+    );
 });
