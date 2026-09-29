@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { query } from './config/db.js';
 import { initDb } from './model/initDb.js';
 import registerRouter from './routes/register.js';
+import loginRouter from './routes/login.js';
 dotenv.config();
 
 const app = express();
@@ -11,6 +12,7 @@ const port = process.env.PORT;
 app.use(cors());
 app.use(express.json());
 app.use('/api/auth/register', registerRouter);
+app.use('/api/auth/login', loginRouter);
 
 // Base Health Check
 app.get('/api/health', (req, res) => {
