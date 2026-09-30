@@ -5,14 +5,13 @@ import { query } from './config/db.js';
 import { initDb } from './model/initDb.js';
 import registerRouter from './routes/register.js';
 import loginRouter from './routes/login.js';
+import requireAuth from './middleware/requireAuth.js';
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT;
 app.use(cors());
 app.use(express.json());
-app.use('/api/auth/register', registerRouter);
-app.use('/api/auth/login', loginRouter);
 
 // Base Health Check
 app.get('/api/health', (req, res) => {
@@ -22,6 +21,10 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+app.use(requireAuth);
+app.use('/api/auth/register', registerRouter);
+app.use('/api/auth/login', loginRouter);
 
 initDb();
 
