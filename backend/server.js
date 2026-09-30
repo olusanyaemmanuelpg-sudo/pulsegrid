@@ -6,6 +6,7 @@ import { initDb } from './model/initDb.js';
 import registerRouter from './routes/register.js';
 import loginRouter from './routes/login.js';
 import requireAuth from './middleware/requireAuth.js';
+import monitorRoutes from './routes/monitors.js';
 dotenv.config();
 
 const app = express();
@@ -21,10 +22,11 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
-
-app.use(requireAuth);
 app.use('/api/auth/register', registerRouter);
 app.use('/api/auth/login', loginRouter);
+
+app.use(requireAuth);
+app.use('/api/monitors', monitorRoutes);
 
 initDb();
 

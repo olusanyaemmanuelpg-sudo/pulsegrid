@@ -19,7 +19,7 @@ export const initDb = async () => {
       name VARCHAR(120) NOT NULL,
       type VARCHAR(30) NOT NULL, -- 'http', 'postgres', 'mysql', 'redis', 'cron'
       target TEXT NOT NULL,       -- URL or connection string
-      check_interval INTEGER DEFAULT 30, -- In seconds (e.g. 30, 60, 300)
+      check_interval INTEGER NOT NULL DEFAULT 30, -- In seconds (e.g. 30, 60, 300)
       keyword VARCHAR(100),       -- Optional keyword assertion for HTTP
       status VARCHAR(20) DEFAULT 'pending', -- 'up', 'down', 'pending'
       last_latency_ms INTEGER DEFAULT NULL,
@@ -31,8 +31,43 @@ export const initDb = async () => {
   try {
     await query(createUsersTableSQL);
     await query(createMonitorsTableSQL);
+    await query(
+      'UPDATE monitors SET check_interval = 30 WHERE check_interval IS NULL;',
+    );
+    await query(
+      'ALTER TABLE monitors ALTER COLUMN check_interval SET DEFAULT 30;',
+    );
+    await query(
+      'ALTER TABLE monitors ALTER COLUMN check_interval SET NOT NULL;',
+    );
+    await query(`
+      WITH ranked_monitors AS (
+        SELECT id,
+          ROW_NUMBER() OVER (
+            PARTITION BY user_id, lower(btrim(name)), type, btrim(target),
+              check_interval, COALESCE(NULLIF(btrim(keyword), ''), '')
+            ORDER BY created_at ASC NULLS LAST, id ASC
+          ) AS duplicate_rank
+        FROM monitors
+      )
+      DELETE FROM monitors
+      USING ranked_monitors
+      WHERE monitors.id = ranked_monitors.id
+        AND ranked_monitors.duplicate_rank > 1;
+    `);
+    await query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS monitors_unique_user_configuration_idx
+      ON monitors (
+        user_id,
+        lower(btrim(name)),
+        type,
+        btrim(target),
+        check_interval,
+        COALESCE(NULLIF(btrim(keyword), ''), '')
+      );
+    `);
     console.log(
-      '✅ PostgreSQL: users and monitors tables verified / created successfully.',
+      '✅ PostgreSQL: tables and monitor uniqueness verified successfully.',
     );
   } catch (err) {
     console.error('❌ Failed to initialize database table:', err.message);

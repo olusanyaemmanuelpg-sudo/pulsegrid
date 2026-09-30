@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useRef, useState } from 'react';
 
 const MonitorContext = createContext();
 
@@ -14,7 +14,7 @@ const initialMonitors = [
     interval: 30,
     lastChecked: 'Just now',
     history: [95, 82, 88, 76, 92, 84, 80, 78, 85, 84],
-    consecutiveFails: 0
+    consecutiveFails: 0,
   },
   {
     id: 'mon-2',
@@ -27,7 +27,7 @@ const initialMonitors = [
     interval: 60,
     lastChecked: '1m ago',
     history: [22, 19, 18, 17, 20, 19, 18, 18, 19, 18],
-    consecutiveFails: 0
+    consecutiveFails: 0,
   },
   {
     id: 'mon-3',
@@ -40,7 +40,7 @@ const initialMonitors = [
     interval: 30,
     lastChecked: 'Just now',
     history: [5, 4, 4, 3, 5, 4, 4, 4, 3, 4],
-    consecutiveFails: 0
+    consecutiveFails: 0,
   },
   {
     id: 'mon-4',
@@ -53,7 +53,7 @@ const initialMonitors = [
     interval: 86400,
     lastChecked: '4h ago',
     history: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    consecutiveFails: 0
+    consecutiveFails: 0,
   },
   {
     id: 'mon-5',
@@ -67,14 +67,30 @@ const initialMonitors = [
     lastChecked: '30s ago',
     history: [110, 115, 0, 0, 0, 0, 0, 0, 0, 0],
     consecutiveFails: 3,
-    error: '502 Bad Gateway: Bandwidth Limit Exceeded'
-  }
+    error: '502 Bad Gateway: Bandwidth Limit Exceeded',
+  },
 ];
+
+const monitorIdentity = (monitor) =>
+  JSON.stringify([
+    monitor.name.trim().toLowerCase(),
+    monitor.type,
+    monitor.target.trim(),
+    Number(monitor.interval ?? 30),
+    monitor.keyword?.trim() ?? '',
+  ]);
 
 export const MonitorProvider = ({ children }) => {
   const [monitors, setMonitors] = useState(initialMonitors);
+  const knownMonitorIdentities = useRef(
+    new Set(initialMonitors.map(monitorIdentity)),
+  );
 
   const addMonitor = (newMon) => {
+    const identity = monitorIdentity(newMon);
+    if (knownMonitorIdentities.current.has(identity)) return false;
+
+    knownMonitorIdentities.current.add(identity);
     const monitorObj = {
       id: `mon-${Date.now()}`,
       ...newMon,
@@ -82,14 +98,23 @@ export const MonitorProvider = ({ children }) => {
       latency: Math.floor(Math.random() * 80) + 20,
       uptime90d: 100.0,
       lastChecked: 'Just now',
-      history: Array(10).fill(50).map(() => Math.floor(Math.random() * 60) + 30),
-      consecutiveFails: 0
+      history: Array(10)
+        .fill(50)
+        .map(() => Math.floor(Math.random() * 60) + 30),
+      consecutiveFails: 0,
     };
-    setMonitors([monitorObj, ...monitors]);
+    setMonitors((currentMonitors) => [monitorObj, ...currentMonitors]);
+    return true;
   };
 
   const deleteMonitor = (id) => {
-    setMonitors(monitors.filter((m) => m.id !== id));
+    const deletedMonitor = monitors.find((monitor) => monitor.id === id);
+    if (deletedMonitor) {
+      knownMonitorIdentities.current.delete(monitorIdentity(deletedMonitor));
+    }
+    setMonitors((currentMonitors) =>
+      currentMonitors.filter((monitor) => monitor.id !== id),
+    );
   };
 
   const testMonitor = (id) => {
@@ -104,11 +129,11 @@ export const MonitorProvider = ({ children }) => {
             latency: newLatency,
             lastChecked: 'Just now',
             history: [...m.history.slice(1), newLatency],
-            error: isUp ? null : 'Connection Timed Out (> 3000ms)'
+            error: isUp ? null : 'Connection Timed Out (> 3000ms)',
           };
         }
         return m;
-      })
+      }),
     );
   };
 
@@ -117,11 +142,15 @@ export const MonitorProvider = ({ children }) => {
   const upMonitors = monitors.filter((m) => m.status === 'up').length;
   const downMonitors = monitors.filter((m) => m.status === 'down').length;
   const avgUptime = (
-    monitors.reduce((acc, m) => acc + (m.uptime90d || 100), 0) / (totalMonitors || 1)
+    monitors.reduce((acc, m) => acc + (m.uptime90d || 100), 0) /
+    (totalMonitors || 1)
   ).toFixed(2);
-  const activeLatencies = monitors.filter((m) => m.status === 'up' && m.latency > 0);
+  const activeLatencies = monitors.filter(
+    (m) => m.status === 'up' && m.latency > 0,
+  );
   const avgLatency = Math.round(
-    activeLatencies.reduce((acc, m) => acc + m.latency, 0) / (activeLatencies.length || 1)
+    activeLatencies.reduce((acc, m) => acc + m.latency, 0) /
+      (activeLatencies.length || 1),
   );
 
   return (
@@ -136,8 +165,8 @@ export const MonitorProvider = ({ children }) => {
           up: upMonitors,
           down: downMonitors,
           uptime: avgUptime,
-          avgLatency
-        }
+          avgLatency,
+        },
       }}
     >
       {children}

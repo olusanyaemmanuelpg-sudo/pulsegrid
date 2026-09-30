@@ -9,6 +9,7 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
   const [target, setTarget] = useState('');
   const [interval, setInterval] = useState(30);
   const [keyword, setKeyword] = useState('');
+  const [formError, setFormError] = useState('');
   const [copied, setCopied] = useState(false);
   const [cronToken] = useState(() => Math.random().toString(36).substring(2, 7));
 
@@ -25,18 +26,23 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
       finalTarget = generatedCronUrl;
     }
 
-    addMonitor({
+    const added = addMonitor({
       name,
       type: monitorType,
       target: finalTarget,
       interval: Number(interval),
       keyword: keyword.trim() || undefined
     });
+    if (!added) {
+      setFormError('A monitor with these settings already exists.');
+      return;
+    }
 
     // Reset form
     setName('');
     setTarget('');
     setKeyword('');
+    setFormError('');
     onClose();
   };
 
@@ -101,6 +107,7 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="modal-form">
+          {formError && <p className="auth-error" role="alert">{formError}</p>}
           <div className="form-group">
             <label className="form-label">Monitor Friendly Name</label>
             <input
