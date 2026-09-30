@@ -7,6 +7,7 @@ import registerRouter from './routes/register.js';
 import loginRouter from './routes/login.js';
 import requireAuth from './middleware/requireAuth.js';
 import monitorRoutes from './routes/monitors.js';
+import { startScheduler } from './service/scheduler.js';
 dotenv.config();
 
 const app = express();
@@ -28,7 +29,9 @@ app.use('/api/auth/login', loginRouter);
 app.use(requireAuth);
 app.use('/api/monitors', monitorRoutes);
 
-initDb();
+initDb().then(() => {
+  startScheduler(10000); // Ticks every 10 seconds
+});
 
 app.listen(port, () => {
   console.log(`🚀 PulseGrid API listening at http://localhost:${port}`);
