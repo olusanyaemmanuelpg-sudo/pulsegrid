@@ -1,5 +1,6 @@
 import { query } from '../config/db.js';
 import { proberHttp } from '../service/prober.js';
+import { recordProbeResult } from '../service/healthService.js';
 
 const monitorTypes = new Set(['http', 'postgres', 'mysql', 'redis', 'cron']);
 
@@ -131,17 +132,25 @@ export const testMonitor = async (req, res) => {
     if (monitor.type !== 'http') {
       return res
         .status(400)
-        .json({ message: 'On-demand testing currently supports HTTP monitors only.' });
+        .json({
+          message: 'On-demand testing currently supports HTTP monitors only.',
+        });
     }
 
     const result = await proberHttp(monitor.target, monitor.keyword);
+    const { finalStatus, shouldAlert } = await recordProbeResult(
+      monitor,
+      result,
+    );
+    const persistedStatus =
+      finalStatus === 'pending_down' ? 'pending' : finalStatus;
 
     const { rows: updatedRows } = await query(
       `UPDATE monitors
        SET status = $1, last_latency_ms = $2, last_checked_at = NOW()
        WHERE id = $3 AND user_id = $4
        RETURNING *;`,
-      [result.status, result.latency, id, userId],
+      [persistedStatus, result.latency, id, userId],
     );
     if (updatedRows.length === 0) {
       return res.status(404).json({ message: 'Monitor not found.' });
@@ -149,6 +158,8 @@ export const testMonitor = async (req, res) => {
 
     return res.status(200).json({
       monitor: updatedRows[0],
+      finalStatus,
+      shouldAlert,
       error: result.error,
     });
   } catch (error) {
