@@ -1,4 +1,5 @@
 import { query } from '../config/db.js';
+import { proberHttp } from '../service/prober.js';
 
 const monitorTypes = new Set(['http', 'postgres', 'mysql', 'redis', 'cron']);
 
@@ -101,13 +102,57 @@ export const deleteMonitor = async (req, res) => {
       [id, req.user.id],
     );
     if (rows.length === 0)
-      return res
-        .status(404)
-        .json({ message: 'Monitor not found.' });
+      return res.status(404).json({ message: 'Monitor not found.' });
 
     return res.status(200).json({ message: 'Monitor deleted successfully.' });
   } catch (error) {
     console.error('Monitor delete failed:', error.message);
     return res.status(500).json({ message: 'Unable to delete monitor.' });
+  }
+};
+
+export const testMonitor = async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return res.status(400).json({ message: 'A valid monitor ID is required.' });
+  }
+
+  const userId = req.user.id;
+
+  try {
+    const { rows } = await query(
+      'SELECT * FROM monitors WHERE id = $1 AND user_id = $2;',
+      [id, userId],
+    );
+    if (rows.length === 0)
+      return res.status(404).json({ message: 'Monitor not found.' });
+
+    const monitor = rows[0];
+    if (monitor.type !== 'http') {
+      return res
+        .status(400)
+        .json({ message: 'On-demand testing currently supports HTTP monitors only.' });
+    }
+
+    const result = await proberHttp(monitor.target, monitor.keyword);
+
+    const { rows: updatedRows } = await query(
+      `UPDATE monitors
+       SET status = $1, last_latency_ms = $2, last_checked_at = NOW()
+       WHERE id = $3 AND user_id = $4
+       RETURNING *;`,
+      [result.status, result.latency, id, userId],
+    );
+    if (updatedRows.length === 0) {
+      return res.status(404).json({ message: 'Monitor not found.' });
+    }
+
+    return res.status(200).json({
+      monitor: updatedRows[0],
+      error: result.error,
+    });
+  } catch (error) {
+    console.error('Monitor test failed:', error.message);
+    return res.status(500).json({ message: 'Unable to test monitor.' });
   }
 };
