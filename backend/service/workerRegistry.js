@@ -25,12 +25,15 @@ export const registerWorkerHeartbeat = async () => {
 /**
  * Discovers all currently healthy workers across the cluster.
  * Cleans up dead workers whose TTL expired.
+ *
+ * Important: never self-elect when the registry is empty or Redis is unhealthy.
+ * That would allow multiple workers to probe the same monitors during partial outages.
  */
 export const getActiveWorkers = async () => {
   try {
     const workers = await redis.smembers(REGISTRY_SET);
     if (!workers || workers.length === 0) {
-      return [MY_WORKER_ID];
+      return [];
     }
 
     // Check which workers still have an active TTL heartbeat
@@ -55,10 +58,10 @@ export const getActiveWorkers = async () => {
       await redis.srem(REGISTRY_SET, ...deadWorkers);
     }
 
-    return healthyWorkers.length > 0 ? healthyWorkers : [MY_WORKER_ID];
+    return healthyWorkers;
   } catch (err) {
     console.error('❌ [WorkerRegistry] Discovery error:', err.message);
-    return [MY_WORKER_ID];
+    return [];
   }
 };
 

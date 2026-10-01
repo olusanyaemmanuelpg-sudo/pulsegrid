@@ -124,6 +124,14 @@ export const runSchedulerCycle = async () => {
     if (dueMonitors.length > 0) {
       // 1. Discover active cluster workers and build the Hash Ring
       const activeWorkers = await getActiveWorkers();
+
+      if (activeWorkers.length === 0) {
+        console.warn(
+          `⚠️ [${MY_WORKER_ID}] No active workers confirmed in registry; skipping scheduler cycle to avoid duplicate probing during cluster churn.`,
+        );
+        return;
+      }
+
       const hashRing = new ConsistentHashRing(activeWorkers);
 
       // 2. Partition: Filter monitors that belong to THIS worker
