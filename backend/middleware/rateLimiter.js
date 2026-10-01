@@ -14,6 +14,7 @@ export const createRateLimiter = ({
   windowMs = 60000,
   max = 10,
   keyGenerator,
+  failOpen = false,
 }) => {
   return async (req, res, next) => {
     try {
@@ -64,12 +65,15 @@ export const createRateLimiter = ({
 
       return next();
     } catch (err) {
-      // Resilience: If Redis ever has a hiccup, fail open so we don't bring down traffic
-      console.warn(
-        '⚠️ [RateLimiter] Redis rate limiting error (failing open):',
-        err.message,
-      );
-      return next();
+      console.warn('⚠️ [RateLimiter] Redis rate limiting error:', err.message);
+
+      if (failOpen) {
+        return next();
+      }
+
+      return res.status(503).json({
+        message: 'Rate limiter unavailable. Please try again shortly.',
+      });
     }
   };
 };

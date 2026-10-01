@@ -10,12 +10,12 @@ const TOKEN_STORAGE_KEY = 'pulsegrid-token';
 export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(() => {
     try {
-      const user = localStorage.getItem(USER_STORAGE_KEY);
-      const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+      const user = sessionStorage.getItem(USER_STORAGE_KEY);
+      const token = sessionStorage.getItem(TOKEN_STORAGE_KEY);
       return user && token ? { user: JSON.parse(user), token } : null;
     } catch {
-      localStorage.removeItem(USER_STORAGE_KEY);
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      sessionStorage.removeItem(USER_STORAGE_KEY);
+      sessionStorage.removeItem(TOKEN_STORAGE_KEY);
       return null;
     }
   });
@@ -35,8 +35,8 @@ export const AuthProvider = ({ children }) => {
       throw new Error('The server returned an invalid authentication response.');
     }
 
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data.user));
-    localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+    sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data.user));
+    sessionStorage.setItem(TOKEN_STORAGE_KEY, data.token);
     setSession({ user: data.user, token: data.token });
     return data.user;
   };
@@ -49,8 +49,8 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     setSession(null);
-    localStorage.removeItem(USER_STORAGE_KEY);
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    sessionStorage.removeItem(USER_STORAGE_KEY);
+    sessionStorage.removeItem(TOKEN_STORAGE_KEY);
   };
 
   const value = {

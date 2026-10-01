@@ -13,12 +13,25 @@ import { getPublicStatus } from './controller/monitorController.js';
 import { createRateLimiter } from './middleware/rateLimiter.js';
 import { startTelemetryFlusher } from './service/telemetryFlusher.js';
 import { startWorkerHeartbeat } from './service/workerRegistry.js';
+import { corsOptions } from './security/cors.js';
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT;
-app.use(cors());
-app.use(express.json());
+const port = Number(process.env.PORT || 3000);
+app.disable('x-powered-by');
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+app.use(express.json({ limit: '1mb' }));
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader(
+    'Permissions-Policy',
+    'geolocation=(), microphone=(), camera=(), fullscreen=(self)',
+  );
+  next();
+});
 
 // Base Health Check
 app.get('/api/health', (req, res) => {
@@ -31,8 +44,9 @@ app.get('/api/health', (req, res) => {
 
 const authLimiter = createRateLimiter({
   prefix: 'auth',
-  windowMs: 60 * 1000, // 1 minute
-  max: 5, // Limit each IP to 5 requests per windowMs
+  windowMs: 60 * 1000,
+  max: 5,
+  failOpen: process.env.RATE_LIMIT_FAIL_OPEN === 'true',
 });
 
 app.get('/api/status', getPublicStatus);
