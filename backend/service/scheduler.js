@@ -1,5 +1,5 @@
 import { query } from '../config/db.js';
-import { proberHttp, probeRedis } from './prober.js';
+import { proberHttp, probePostgres, probeRedis } from './prober.js';
 import { recordProbeResult } from './healthService.js';
 
 let isProcessing = false;
@@ -9,6 +9,8 @@ export const checkMonitor = async (monitor) => {
     let probeResult;
     if (monitor.type === 'redis') {
       probeResult = await probeRedis(monitor.target, monitor.keyword);
+    } else if (monitor.type === 'postgres') {
+      probeResult = await probePostgres(monitor.target);
     } else {
       probeResult = await proberHttp(monitor.target, monitor.keyword);
     }
@@ -43,7 +45,7 @@ export const runSchedulerCycle = async () => {
   try {
     const { rows: dueMonitors } = await query(
       `SELECT * FROM monitors
-       WHERE type IN ('http', 'redis')
+       WHERE type IN ('http', 'redis', 'postgres')
          AND (last_checked_at IS NULL
            OR NOW() - last_checked_at >= (check_interval * INTERVAL '1 second'))
        LIMIT 50;`,

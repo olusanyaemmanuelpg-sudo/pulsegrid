@@ -1,4 +1,5 @@
 import Redis from 'ioredis';
+import { Client } from 'pg';
 
 export const proberHttp = async (target, keyword = null) => {
   try {
@@ -65,5 +66,35 @@ export const probeRedis = async (target) => {
     };
   } finally {
     client?.disconnect();
+  }
+};
+
+export const probePostgres = async (target) => {
+  let client;
+
+  try {
+    const start = performance.now();
+    client = new Client({
+      connectionString: target,
+      connectionTimeoutMillis: 3000,
+      query_timeout: 3000,
+    });
+
+    await client.connect();
+    await client.query('SELECT 1');
+
+    return {
+      status: 'up',
+      latency: Math.round(performance.now() - start),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      status: 'down',
+      latency: 0,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    client?.end();
   }
 };
