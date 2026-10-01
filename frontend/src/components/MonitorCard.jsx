@@ -2,16 +2,29 @@ import React, { useState } from 'react';
 import { Globe, Database, Server, Clock, RefreshCw, Trash2, AlertTriangle } from './Icons';
 import { useMonitors } from '../context/MonitorContext';
 
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+).replace(/\/+$/, '');
+
 export const MonitorCard = ({ monitor }) => {
   const { deleteMonitor, testMonitor } = useMonitors();
   const [testing, setTesting] = useState(false);
+  const [copiedHeartbeat, setCopiedHeartbeat] = useState(false);
 
-  const handleTest = () => {
+  const handleTest = async () => {
     setTesting(true);
-    setTimeout(() => {
-      testMonitor(monitor.id);
+    try {
+      await testMonitor(monitor.id);
+    } finally {
       setTesting(false);
-    }, 600);
+    }
+  };
+
+  const handleCopyHeartbeat = () => {
+    const cmd = `curl -fsS ${API_BASE_URL}/api/heartbeat/${monitor.id}`;
+    navigator.clipboard.writeText(cmd);
+    setCopiedHeartbeat(true);
+    setTimeout(() => setCopiedHeartbeat(false), 2000);
   };
 
   const getIcon = () => {
@@ -29,6 +42,24 @@ export const MonitorCard = ({ monitor }) => {
   };
 
   const isUp = monitor.status === 'up';
+
+  // Calculate real 30-slot check timeline
+  const recentChecks = monitor.recentChecks || [];
+  const totalSlots = 30;
+  const emptyCount = Math.max(0, totalSlots - recentChecks.length);
+  const slots = [
+    ...Array(emptyCount).fill({ type: 'empty' }),
+    ...recentChecks.map((c) => ({ type: 'check', ...c })),
+  ];
+
+  const checkCount = recentChecks.length;
+  const upCount = recentChecks.filter((c) => c.status === 'up').length;
+  const successPercentage =
+    checkCount > 0 ? Math.round((upCount / checkCount) * 100) : 100;
+  const successLabel =
+    checkCount === 0
+      ? 'Awaiting checks'
+      : `${successPercentage}% success (${upCount}/${checkCount})`;
 
   return (
     <div className={`monitor-card ${isUp ? 'is-up' : 'is-down'}`}>
@@ -75,7 +106,7 @@ export const MonitorCard = ({ monitor }) => {
         <div className="card-outage-alert">
           <AlertTriangle size={15} />
           <span>
-            {monitor.error || 'Outage detected across 3 worker consensus nodes.'}
+            {monitor.error || 'Outage detected across worker verification nodes.'}
           </span>
         </div>
       )}
@@ -106,25 +137,60 @@ export const MonitorCard = ({ monitor }) => {
         </div>
       </div>
 
-      {/* Visual Uptime Bar (30-day mini blocks) */}
+      {/* Visual Uptime Bar (Accurate Check History Timeline) */}
       <div className="uptime-strip-container">
         <div className="uptime-strip-header">
-          <span className="strip-title">Recent Check History</span>
-          <span className="strip-stat">{isUp ? '100% success' : 'Degraded'}</span>
+          <span className="strip-title">Recent Check History (Last 30 probes)</span>
+          <span
+            className={`strip-stat font-mono ${successPercentage < 100 && checkCount > 0 ? 'text-red' : ''}`}
+          >
+            {successLabel}
+          </span>
         </div>
         <div className="uptime-bars">
-          {Array.from({ length: 30 }).map((_, idx) => {
-            const isFailing = !isUp && idx >= 28;
+          {slots.map((slot, idx) => {
+            if (slot.type === 'empty') {
+              return (
+                <div
+                  key={idx}
+                  className="uptime-bar-slice empty"
+                  title="No check logged in this slot yet"
+                />
+              );
+            }
+            const isPass = slot.status === 'up';
+            const time = slot.created_at
+              ? new Date(slot.created_at).toLocaleTimeString()
+              : '';
+            const tooltip = `${time}: ${isPass ? 'Operational' : 'Outage'} (${slot.latency_ms ?? 0}ms)${slot.error ? ' - ' + slot.error : ''}`;
             return (
               <div
-                key={idx}
-                className={`uptime-bar-slice ${isFailing ? 'fail' : 'pass'}`}
-                title={`Day ${30 - idx}: ${isFailing ? 'Incident detected' : '100% Operational'}`}
+                key={slot.id || idx}
+                className={`uptime-bar-slice ${isPass ? 'pass' : 'fail'}`}
+                title={tooltip}
               />
             );
           })}
         </div>
       </div>
+
+      {/* Cron Heartbeat helper command if type is cron */}
+      {monitor.type === 'cron' && (
+        <div className="card-cron-snippet">
+          <span className="cron-snippet-label">Heartbeat Ping URL:</span>
+          <div className="cron-snippet-cmd">
+            <code>curl -fsS {API_BASE_URL}/api/heartbeat/{monitor.id}</code>
+            <button
+              type="button"
+              className="btn-copy-mini"
+              onClick={handleCopyHeartbeat}
+              title="Copy heartbeat command"
+            >
+              {copiedHeartbeat ? '✓ Copied' : 'Copy Command'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1272,6 +1272,60 @@
   opacity: 0.9;
 }
 
+.uptime-bar-slice.fail:hover {
+  opacity: 1;
+}
+
+.uptime-bar-slice.empty {
+  background-color: var(--border-color);
+  opacity: 0.35;
+}
+
+.card-cron-snippet {
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cron-snippet-label {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.cron-snippet-cmd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cron-snippet-cmd code {
+  font-size: 0.75rem;
+  color: var(--accent-purple, #a855f7);
+  word-break: break-all;
+}
+
+.btn-copy-mini {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-copy-mini:hover {
+  background: var(--bg-hover);
+}
+
 /* Empty State */
 .empty-state {
   text-align: center;
@@ -1712,6 +1766,11 @@
 
 .status-bar.bar-fail {
   background-color: var(--accent-red);
+}
+
+.status-bar.bar-empty {
+  background-color: var(--border-color);
+  opacity: 0.35;
 }
 
 .service-stat-end {

@@ -63,18 +63,38 @@ export const StatusPage = () => {
                   </span>
                 </div>
 
-                {/* 30-Day mini bar chart */}
+                {/* Real 30-Check History Timeline */}
                 <div className="status-history-bars">
-                  {Array.from({ length: 30 }).map((_, idx) => {
-                    const isFailing = !isUp && idx >= 28;
-                    return (
-                      <div
-                        key={idx}
-                        className={`status-bar ${isFailing ? 'bar-fail' : 'bar-pass'}`}
-                        title={`Day ${30 - idx}: ${isFailing ? 'Downtime logged' : '100% Uptime'}`}
-                      />
-                    );
-                  })}
+                  {(() => {
+                    const recentChecks = mon.recentChecks || [];
+                    const emptyCount = Math.max(0, 30 - recentChecks.length);
+                    const slots = [
+                      ...Array(emptyCount).fill({ type: 'empty' }),
+                      ...recentChecks.map((c) => ({ type: 'check', ...c })),
+                    ];
+                    return slots.map((slot, idx) => {
+                      if (slot.type === 'empty') {
+                        return (
+                          <div
+                            key={idx}
+                            className="status-bar bar-empty"
+                            title="No check logged yet"
+                          />
+                        );
+                      }
+                      const isPass = slot.status === 'up';
+                      const time = slot.created_at
+                        ? new Date(slot.created_at).toLocaleTimeString()
+                        : '';
+                      return (
+                        <div
+                          key={slot.id || idx}
+                          className={`status-bar ${isPass ? 'bar-pass' : 'bar-fail'}`}
+                          title={`${time}: ${isPass ? 'Operational' : 'Outage'} (${slot.latency_ms ?? 0}ms)`}
+                        />
+                      );
+                    });
+                  })()}
                 </div>
 
                 <div className="service-stat-end">

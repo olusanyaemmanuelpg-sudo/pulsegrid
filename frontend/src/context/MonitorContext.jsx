@@ -27,14 +27,29 @@ const formatTimeAgo = (dateString) => {
 };
 
 // Normalizes database row to frontend UI expectations
-const normalizeMonitor = (m) => ({
-  ...m,
-  latency: m.last_latency_ms ?? 0,
-  interval: m.check_interval ?? 30,
-  uptime90d: 100.0,
-  lastChecked: formatTimeAgo(m.last_checked_at),
-  history: Array.isArray(m.history) ? m.history : [m.last_latency_ms ?? 0],
-});
+const normalizeMonitor = (m) => {
+  const recentChecks = Array.isArray(m.recent_checks) ? m.recent_checks : [];
+  const totalChecks = recentChecks.length;
+  const upChecks = recentChecks.filter((c) => c.status === 'up').length;
+  const realUptime =
+    totalChecks > 0
+      ? Number(((upChecks / totalChecks) * 100).toFixed(1))
+      : m.status === 'up'
+      ? 100.0
+      : m.status === 'pending'
+      ? 100.0
+      : 0.0;
+
+  return {
+    ...m,
+    latency: m.last_latency_ms ?? 0,
+    interval: m.check_interval ?? 30,
+    uptime90d: realUptime,
+    lastChecked: formatTimeAgo(m.last_checked_at),
+    history: recentChecks.map((c) => c.latency_ms ?? 0),
+    recentChecks,
+  };
+};
 
 export const MonitorProvider = ({ children }) => {
   const { token } = useAuth();
@@ -42,21 +57,17 @@ export const MonitorProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch monitors from PostgreSQL via API
+  // Fetch monitors from PostgreSQL via API (authenticated or public status)
   const fetchMonitors = useCallback(
     async (isSilent = false) => {
-      if (!token) {
-        setMonitors([]);
-        return;
-      }
-
       if (!isSilent) setLoading(true);
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/monitors`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+        const endpoint = token ? '/api/monitors' : '/api/status';
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+          headers,
         });
 
         const data = await response.json().catch(() => ({}));
@@ -80,14 +91,12 @@ export const MonitorProvider = ({ children }) => {
   useEffect(() => {
     fetchMonitors();
 
-    if (!token) return;
-
     const intervalId = setInterval(() => {
       fetchMonitors(true); // Silent background refresh
     }, 10000);
 
     return () => clearInterval(intervalId);
-  }, [token, fetchMonitors]);
+  }, [fetchMonitors]);
 
   // Add Monitor (POST /api/monitors)
   const addMonitor = async (newMon) => {

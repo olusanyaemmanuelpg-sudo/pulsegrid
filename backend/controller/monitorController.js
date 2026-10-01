@@ -1,5 +1,5 @@
 import { query } from '../config/db.js';
-import { proberHttp } from '../service/prober.js';
+import { proberHttp, probePostgres, probeRedis } from '../service/prober.js';
 import { recordProbeResult } from '../service/healthService.js';
 
 const monitorTypes = new Set(['http', 'postgres', 'mysql', 'redis', 'cron']);
@@ -59,8 +59,13 @@ export const createMonitor = async (req, res) => {
       ],
     );
 
+    const created = {
+      ...rows[0],
+      recent_checks: [],
+    };
+
     return res.status(201).json({
-      monitor: rows[0],
+      monitor: created,
     });
   } catch (error) {
     if (error.code === '23505') {
@@ -78,9 +83,23 @@ export const getMonitors = async (req, res) => {
   try {
     const { rows } = await query(
       `
-        SELECT * FROM monitors 
-        WHERE user_id = $1 
-        ORDER BY created_at DESC;
+        SELECT m.*, 
+          COALESCE(
+            (
+              SELECT json_agg(c ORDER BY c.created_at ASC)
+              FROM (
+                SELECT id, status, latency_ms, error, created_at
+                FROM monitor_checks
+                WHERE monitor_id = m.id
+                ORDER BY created_at DESC
+                LIMIT 30
+              ) c
+            ),
+            '[]'::json
+          ) AS recent_checks
+        FROM monitors m
+        WHERE m.user_id = $1 
+        ORDER BY m.created_at DESC;
     `,
       [userId],
     );
@@ -129,13 +148,36 @@ export const testMonitor = async (req, res) => {
       return res.status(404).json({ message: 'Monitor not found.' });
 
     const monitor = rows[0];
-    if (monitor.type !== 'http') {
-      return res.status(400).json({
-        message: 'On-demand testing currently supports HTTP monitors only.',
-      });
+    let result;
+
+    if (monitor.type === 'redis') {
+      result = await probeRedis(monitor.target);
+    } else if (monitor.type === 'postgres') {
+      result = await probePostgres(monitor.target);
+    } else if (monitor.type === 'cron') {
+      const referenceTime = monitor.last_checked_at
+        ? new Date(monitor.last_checked_at).getTime()
+        : new Date(monitor.created_at).getTime();
+
+      const elapsedSeconds = Math.floor((Date.now() - referenceTime) / 1000);
+      const gracePeriod = Math.max(
+        60,
+        Math.floor(monitor.check_interval * 0.2),
+      );
+      const maxAllowedSeconds = monitor.check_interval + gracePeriod;
+
+      result =
+        elapsedSeconds > maxAllowedSeconds
+          ? {
+              status: 'down',
+              latency: 0,
+              error: 'Heartbeat overdue / missed deadline',
+            }
+          : { status: 'up', latency: 0, error: null };
+    } else {
+      result = await proberHttp(monitor.target, monitor.keyword);
     }
 
-    const result = await proberHttp(monitor.target, monitor.keyword);
     const { finalStatus, shouldAlert } = await recordProbeResult(
       monitor,
       result,
@@ -145,7 +187,9 @@ export const testMonitor = async (req, res) => {
 
     const { rows: updatedRows } = await query(
       `UPDATE monitors
-       SET status = $1, last_latency_ms = $2, last_checked_at = NOW()
+       SET status = $1, 
+           last_latency_ms = $2, 
+           last_checked_at = CASE WHEN type = 'cron' THEN last_checked_at ELSE NOW() END
        WHERE id = $3 AND user_id = $4
        RETURNING *;`,
       [persistedStatus, result.latency, id, userId],
@@ -154,8 +198,21 @@ export const testMonitor = async (req, res) => {
       return res.status(404).json({ message: 'Monitor not found.' });
     }
 
+    // Fetch updated recent checks
+    const { rows: checkRows } = await query(
+      `SELECT id, status, latency_ms, error, created_at
+       FROM monitor_checks
+       WHERE monitor_id = $1
+       ORDER BY created_at DESC
+       LIMIT 30;`,
+      [id],
+    );
+
     return res.status(200).json({
-      monitor: updatedRows[0],
+      monitor: {
+        ...updatedRows[0],
+        recent_checks: checkRows.reverse(),
+      },
       finalStatus,
       shouldAlert,
       error: result.error,
@@ -163,5 +220,50 @@ export const testMonitor = async (req, res) => {
   } catch (error) {
     console.error('Monitor test failed:', error.message);
     return res.status(500).json({ message: 'Unable to test monitor.' });
+  }
+};
+
+export const getPublicStatus = async (req, res) => {
+  try {
+    const { rows } = await query(`
+      SELECT 
+        m.id, 
+        m.name, 
+        m.type, 
+        m.status, 
+        m.last_latency_ms, 
+        m.check_interval, 
+        m.last_checked_at, 
+        m.created_at,
+        COALESCE(
+          (
+            SELECT json_agg(c ORDER BY c.created_at ASC)
+            FROM (
+              SELECT id, status, latency_ms, error, created_at
+              FROM monitor_checks
+              WHERE monitor_id = m.id
+              ORDER BY created_at DESC
+              LIMIT 30
+            ) c
+          ),
+          '[]'::json
+        ) AS recent_checks
+      FROM monitors m
+      ORDER BY m.created_at ASC;
+    `);
+
+    // Mask any sensitive targets or passwords for public view
+    const publicMonitors = rows.map((mon) => ({
+      ...mon,
+      target:
+        mon.type === 'http'
+          ? mon.target
+          : `${mon.type}://[protected-endpoint]`,
+    }));
+
+    return res.status(200).json({ monitors: publicMonitors });
+  } catch (error) {
+    console.error('Public status fetch failed:', error.message);
+    return res.status(500).json({ message: 'Unable to fetch public status.' });
   }
 };

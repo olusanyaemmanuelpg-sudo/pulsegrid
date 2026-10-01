@@ -36,6 +36,24 @@ export const receiveHeartbeat = async (req, res) => {
       last_checked: Date.now(),
     });
 
+    void query(
+      'INSERT INTO monitor_checks (monitor_id, status, latency_ms, error) VALUES ($1, $2, $3, $4)',
+      [monitorId, 'up', 0, null],
+    ).catch(() => {});
+
+    void redis
+      .lpush(
+        `monitor:${monitorId}:checks`,
+        JSON.stringify({
+          status: 'up',
+          latency_ms: 0,
+          error: null,
+          created_at: new Date().toISOString(),
+        }),
+      )
+      .then(() => redis.ltrim(`monitor:${monitorId}:checks`, 0, 29))
+      .catch(() => {});
+
     if (monitor.status === 'down') {
       void sendTelegramAlert({
         monitor,

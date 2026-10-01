@@ -1,4 +1,5 @@
 import { redis } from '../config/redis.js';
+import { query } from '../config/db.js';
 
 export const recordProbeResult = async (monitor, probeResult) => {
   if (!monitor?.id || !['up', 'down'].includes(probeResult?.status)) {
@@ -8,6 +9,36 @@ export const recordProbeResult = async (monitor, probeResult) => {
   const key = `monitor:${monitor.id}`;
   const lastChecked = Date.now();
   const previousStatus = await redis.hget(key, 'status');
+
+  // Persist check telemetry to PostgreSQL
+  void query(
+    'INSERT INTO monitor_checks (monitor_id, status, latency_ms, error) VALUES ($1, $2, $3, $4)',
+    [
+      monitor.id,
+      probeResult.status,
+      probeResult.latency || 0,
+      probeResult.error || null,
+    ],
+  ).catch((e) =>
+    console.error(
+      `Failed to record check telemetry for monitor ${monitor.id}:`,
+      e.message,
+    ),
+  );
+
+  // Maintain fast 30-item ring buffer in Redis
+  void redis
+    .lpush(
+      `monitor:${monitor.id}:checks`,
+      JSON.stringify({
+        status: probeResult.status,
+        latency_ms: probeResult.latency || 0,
+        error: probeResult.error || null,
+        created_at: new Date(lastChecked).toISOString(),
+      }),
+    )
+    .then(() => redis.ltrim(`monitor:${monitor.id}:checks`, 0, 29))
+    .catch(() => {});
 
   if (probeResult.status === 'up') {
     await redis.hmset(key, {

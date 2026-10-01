@@ -28,9 +28,23 @@ export const initDb = async () => {
     );
   `;
 
+  const createMonitorChecksTableSQL = `
+    CREATE TABLE IF NOT EXISTS monitor_checks (
+      id BIGSERIAL PRIMARY KEY,
+      monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+      status VARCHAR(20) NOT NULL,
+      latency_ms INTEGER NOT NULL DEFAULT 0,
+      error TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_monitor_checks_monitor_created
+    ON monitor_checks (monitor_id, created_at DESC);
+  `;
+
   try {
     await query(createUsersTableSQL);
     await query(createMonitorsTableSQL);
+    await query(createMonitorChecksTableSQL);
     await query(
       'UPDATE monitors SET check_interval = 30 WHERE check_interval IS NULL;',
     );

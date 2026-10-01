@@ -60,8 +60,16 @@ export const DashboardPage = ({ onOpenAddModal }) => {
     }, 500);
   };
 
-  const handleTestAll = () => {
-    monitors.forEach((m) => testMonitor(m.id));
+  const [testingAll, setTestingAll] = useState(false);
+
+  const handleTestAll = async () => {
+    if (testingAll || monitors.length === 0) return;
+    setTestingAll(true);
+    try {
+      await Promise.allSettled(monitors.map((m) => testMonitor(m.id)));
+    } finally {
+      setTestingAll(false);
+    }
   };
 
   return (
@@ -80,9 +88,14 @@ export const DashboardPage = ({ onOpenAddModal }) => {
         </div>
 
         <div className="dashboard-header-actions">
-          <button className="btn-secondary" onClick={handleTestAll} title="Ping all monitors">
+          <button
+            className={`btn-secondary ${testingAll ? 'spinning' : ''}`}
+            onClick={handleTestAll}
+            disabled={testingAll}
+            title="Ping all monitors"
+          >
             <RefreshCw size={15} />
-            <span>Test All Probes</span>
+            <span>{testingAll ? 'Testing Probes...' : 'Test All Probes'}</span>
           </button>
           <button
             className="btn-secondary"
