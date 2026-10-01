@@ -7,6 +7,7 @@ import registerRouter from './routes/register.js';
 import loginRouter from './routes/login.js';
 import requireAuth from './middleware/requireAuth.js';
 import monitorRoutes from './routes/monitors.js';
+import heartbeatRoutes from './routes/heartbeatRoute.js';
 import { startScheduler } from './service/scheduler.js';
 dotenv.config();
 
@@ -25,6 +26,7 @@ app.get('/api/health', (req, res) => {
 });
 app.use('/api/auth/register', registerRouter);
 app.use('/api/auth/login', loginRouter);
+app.use('/api/heartbeat', heartbeatRoutes);
 
 app.use(requireAuth);
 app.use('/api/monitors', monitorRoutes);

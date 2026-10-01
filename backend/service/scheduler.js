@@ -11,6 +11,27 @@ export const checkMonitor = async (monitor) => {
       probeResult = await probeRedis(monitor.target, monitor.keyword);
     } else if (monitor.type === 'postgres') {
       probeResult = await probePostgres(monitor.target);
+    } else if (monitor.type === 'cron') {
+      // If no heartbeat has arrived yet, count time from monitor creation
+      const referenceTime = monitor.last_checked_at
+        ? new Date(monitor.last_checked_at).getTime()
+        : new Date(monitor.created_at).getTime();
+
+      const elapsedSeconds = Math.floor((Date.now() - referenceTime) / 1000);
+      const gracePeriod = Math.max(
+        60,
+        Math.floor(monitor.check_interval * 0.2),
+      );
+      const maxAllowedSeconds = monitor.check_interval + gracePeriod;
+
+      probeResult =
+        elapsedSeconds > maxAllowedSeconds
+          ? {
+              status: 'down',
+              latency: 0,
+              error: 'Heartbeat overdue / missed deadline',
+            }
+          : { status: 'up', latency: 0, error: null };
     } else {
       probeResult = await proberHttp(monitor.target, monitor.keyword);
     }
@@ -23,7 +44,9 @@ export const checkMonitor = async (monitor) => {
 
     await query(
       `UPDATE monitors 
-       SET status = $1, last_latency_ms = $2, last_checked_at = NOW() 
+         SET status = $1,
+           last_latency_ms = $2,
+           last_checked_at = CASE WHEN type = 'cron' THEN last_checked_at ELSE NOW() END
        WHERE id = $3`,
       [persistedStatus, probeResult.latency, monitor.id],
     );
@@ -45,9 +68,20 @@ export const runSchedulerCycle = async () => {
   try {
     const { rows: dueMonitors } = await query(
       `SELECT * FROM monitors
-       WHERE type IN ('http', 'redis', 'postgres')
-         AND (last_checked_at IS NULL
-           OR NOW() - last_checked_at >= (check_interval * INTERVAL '1 second'))
+        WHERE (
+          -- Outbound probers (HTTP, Postgres, Redis): probe when check_interval elapses
+          (type IN ('http', 'redis', 'postgres') AND (
+            last_checked_at IS NULL
+            OR NOW() - last_checked_at >= (check_interval * INTERVAL '1 second')
+          ))
+          OR
+          -- Cron monitors: only evaluate if not already DOWN, and overdue past interval
+          (type = 'cron' AND status != 'down' AND (
+            (last_checked_at IS NOT NULL AND NOW() - last_checked_at >= (check_interval * INTERVAL '1 second'))
+            OR
+            (last_checked_at IS NULL AND NOW() - created_at >= (check_interval * INTERVAL '1 second'))
+          ))
+        )
        LIMIT 50;`,
     );
 

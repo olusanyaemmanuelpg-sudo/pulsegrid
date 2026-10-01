@@ -36,6 +36,7 @@ export const proberHttp = async (target, keyword = null) => {
 
 export const probeRedis = async (target) => {
   let client;
+  let clientError;
 
   try {
     const start = performance.now();
@@ -44,6 +45,10 @@ export const probeRedis = async (target) => {
       maxRetriesPerRequest: 1,
       lazyConnect: true,
       enableOfflineQueue: false,
+      retryStrategy: () => null,
+    });
+    client.on('error', (error) => {
+      clientError = error;
     });
 
     await client.connect();
@@ -59,10 +64,12 @@ export const probeRedis = async (target) => {
       error: null,
     };
   } catch (error) {
+    const probeError = clientError ?? error;
     return {
       status: 'down',
       latency: 0,
-      error: error instanceof Error ? error.message : String(error),
+      error:
+        probeError instanceof Error ? probeError.message : String(probeError),
     };
   } finally {
     client?.disconnect();

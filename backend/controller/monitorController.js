@@ -130,11 +130,9 @@ export const testMonitor = async (req, res) => {
 
     const monitor = rows[0];
     if (monitor.type !== 'http') {
-      return res
-        .status(400)
-        .json({
-          message: 'On-demand testing currently supports HTTP monitors only.',
-        });
+      return res.status(400).json({
+        message: 'On-demand testing currently supports HTTP monitors only.',
+      });
     }
 
     const result = await proberHttp(monitor.target, monitor.keyword);
