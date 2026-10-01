@@ -25,14 +25,16 @@ export const checkMonitor = async (monitor) => {
       );
       const maxAllowedSeconds = monitor.check_interval + gracePeriod;
 
-      probeResult =
-        elapsedSeconds > maxAllowedSeconds
-          ? {
-              status: 'down',
-              latency: 0,
-              error: 'Heartbeat overdue / missed deadline',
-            }
-          : { status: 'up', latency: 0, error: null };
+      // If the cron monitor is NOT overdue, do not log fake checks or updates!
+      if (elapsedSeconds <= maxAllowedSeconds) {
+        return;
+      }
+
+      probeResult = {
+        status: 'down',
+        latency: 0,
+        error: 'Heartbeat overdue / missed deadline',
+      };
     } else {
       probeResult = await proberHttp(monitor.target, monitor.keyword);
     }
@@ -73,11 +75,31 @@ export const checkMonitor = async (monitor) => {
   }
 };
 
+let lastPruneTime = 0;
+
+const pruneOldChecks = async () => {
+  const now = Date.now();
+  // Prune once every 30 minutes to prevent database bloat
+  if (now - lastPruneTime < 30 * 60 * 1000) return;
+  lastPruneTime = now;
+
+  try {
+    await query(`
+      DELETE FROM monitor_checks
+      WHERE created_at < NOW() - INTERVAL '24 hours';
+    `);
+  } catch (err) {
+    console.error('Telemetry pruning error:', err.message);
+  }
+};
+
 export const runSchedulerCycle = async () => {
   if (isProcessing) return;
   isProcessing = true;
 
   try {
+    void pruneOldChecks();
+
     const { rows: dueMonitors } = await query(
       `SELECT * FROM monitors
         WHERE (
@@ -87,11 +109,11 @@ export const runSchedulerCycle = async () => {
             OR NOW() - last_checked_at >= (check_interval * INTERVAL '1 second')
           ))
           OR
-          -- Cron monitors: only evaluate if not already DOWN, and overdue past interval
+          -- Cron monitors: ONLY evaluate if not already DOWN and overdue past interval + grace period
           (type = 'cron' AND status != 'down' AND (
-            (last_checked_at IS NOT NULL AND NOW() - last_checked_at >= (check_interval * INTERVAL '1 second'))
+            (last_checked_at IS NOT NULL AND NOW() - last_checked_at >= (check_interval + GREATEST(60, check_interval * 0.2)) * INTERVAL '1 second')
             OR
-            (last_checked_at IS NULL AND NOW() - created_at >= (check_interval * INTERVAL '1 second'))
+            (last_checked_at IS NULL AND NOW() - created_at >= (check_interval + GREATEST(60, check_interval * 0.2)) * INTERVAL '1 second')
           ))
         )
        LIMIT 50;`,
