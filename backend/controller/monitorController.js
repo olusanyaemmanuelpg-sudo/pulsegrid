@@ -1,4 +1,5 @@
 import { query } from '../config/db.js';
+import { redis } from '../config/redis.js';
 import { proberHttp, probePostgres, probeRedis } from '../service/prober.js';
 import { recordProbeResult } from '../service/healthService.js';
 
@@ -82,28 +83,68 @@ export const getMonitors = async (req, res) => {
   const userId = req.user.id;
   try {
     const { rows } = await query(
-      `
-        SELECT m.*, 
-          COALESCE(
-            (
-              SELECT json_agg(c ORDER BY c.created_at ASC)
-              FROM (
-                SELECT id, status, latency_ms, error, created_at
-                FROM monitor_checks
-                WHERE monitor_id = m.id
-                ORDER BY created_at DESC
-                LIMIT 30
-              ) c
-            ),
-            '[]'::json
-          ) AS recent_checks
-        FROM monitors m
-        WHERE m.user_id = $1 
-        ORDER BY m.created_at DESC;
-    `,
+      `SELECT * FROM monitors WHERE user_id = $1 ORDER BY created_at DESC;`,
       [userId],
     );
-    return res.status(200).json({ monitors: rows });
+
+    if (rows.length === 0) {
+      return res.status(200).json({ monitors: [] });
+    }
+
+    // 1. Pipeline fetch from Redis Hot Tier (< 1ms RAM lookup)
+    const pipeline = redis.pipeline();
+    rows.forEach((m) => pipeline.lrange(`monitor:${m.id}:checks`, 0, 29));
+    const redisResults = await pipeline.exec();
+
+    // 2. Cache-Aside mapping with PostgreSQL cold fallback
+    const monitorsWithChecks = await Promise.all(
+      rows.map(async (monitor, idx) => {
+        const [err, rawChecks] = redisResults?.[idx] || [];
+        let checks = [];
+
+        if (!err && Array.isArray(rawChecks) && rawChecks.length > 0) {
+          checks = rawChecks
+            .map((r) => {
+              try {
+                return JSON.parse(r);
+              } catch {
+                return null;
+              }
+            })
+            .filter(Boolean)
+            .reverse();
+        } else {
+          // Cold-start fallback from PostgreSQL
+          const { rows: dbChecks } = await query(
+            `SELECT id, status, latency_ms, error, created_at
+             FROM monitor_checks
+             WHERE monitor_id = $1
+             ORDER BY created_at DESC
+             LIMIT 30;`,
+            [monitor.id],
+          );
+
+          if (dbChecks.length > 0) {
+            // Rehydrate Redis hot tier asynchronously
+            const fillPipe = redis.pipeline();
+            for (const c of dbChecks) {
+              fillPipe.rpush(`monitor:${monitor.id}:checks`, JSON.stringify(c));
+            }
+            fillPipe.ltrim(`monitor:${monitor.id}:checks`, 0, 29);
+            void fillPipe.exec().catch(() => {});
+          }
+
+          checks = dbChecks.reverse();
+        }
+
+        return {
+          ...monitor,
+          recent_checks: checks,
+        };
+      }),
+    );
+
+    return res.status(200).json({ monitors: monitorsWithChecks });
   } catch (error) {
     console.error('Monitor fetch failed:', error.message);
     return res.status(500).json({ message: 'Unable to fetch monitors.' });
@@ -234,32 +275,67 @@ export const getPublicStatus = async (req, res) => {
         m.last_latency_ms, 
         m.check_interval, 
         m.last_checked_at, 
-        m.created_at,
-        COALESCE(
-          (
-            SELECT json_agg(c ORDER BY c.created_at ASC)
-            FROM (
-              SELECT id, status, latency_ms, error, created_at
-              FROM monitor_checks
-              WHERE monitor_id = m.id
-              ORDER BY created_at DESC
-              LIMIT 30
-            ) c
-          ),
-          '[]'::json
-        ) AS recent_checks
+        m.created_at
       FROM monitors m
       ORDER BY m.created_at ASC;
     `);
 
-    // Mask any sensitive targets or passwords for public view
-    const publicMonitors = rows.map((mon) => ({
-      ...mon,
-      target:
-        mon.type === 'http'
-          ? mon.target
-          : `${mon.type}://[protected-endpoint]`,
-    }));
+    if (rows.length === 0) {
+      return res.status(200).json({ monitors: [] });
+    }
+
+    const pipeline = redis.pipeline();
+    rows.forEach((m) => pipeline.lrange(`monitor:${m.id}:checks`, 0, 29));
+    const redisResults = await pipeline.exec();
+
+    const publicMonitors = await Promise.all(
+      rows.map(async (mon, idx) => {
+        const [err, rawChecks] = redisResults?.[idx] || [];
+        let checks = [];
+
+        if (!err && Array.isArray(rawChecks) && rawChecks.length > 0) {
+          checks = rawChecks
+            .map((r) => {
+              try {
+                return JSON.parse(r);
+              } catch {
+                return null;
+              }
+            })
+            .filter(Boolean)
+            .reverse();
+        } else {
+          const { rows: dbChecks } = await query(
+            `SELECT id, status, latency_ms, error, created_at
+             FROM monitor_checks
+             WHERE monitor_id = $1
+             ORDER BY created_at DESC
+             LIMIT 30;`,
+            [mon.id],
+          );
+
+          if (dbChecks.length > 0) {
+            const fillPipe = redis.pipeline();
+            for (const c of dbChecks) {
+              fillPipe.rpush(`monitor:${mon.id}:checks`, JSON.stringify(c));
+            }
+            fillPipe.ltrim(`monitor:${mon.id}:checks`, 0, 29);
+            void fillPipe.exec().catch(() => {});
+          }
+
+          checks = dbChecks.reverse();
+        }
+
+        return {
+          ...mon,
+          target:
+            mon.type === 'http'
+              ? mon.target
+              : `${mon.type}://[protected-endpoint]`,
+          recent_checks: checks,
+        };
+      }),
+    );
 
     return res.status(200).json({ monitors: publicMonitors });
   } catch (error) {
