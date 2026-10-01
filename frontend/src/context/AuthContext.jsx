@@ -1,43 +1,68 @@
 import React, { createContext, useContext, useState } from 'react';
 
 const AuthContext = createContext();
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+).replace(/\/+$/, '');
+const USER_STORAGE_KEY = 'pulsegrid-user';
+const TOKEN_STORAGE_KEY = 'pulsegrid-token';
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('pulsegrid-user');
-    return saved ? JSON.parse(saved) : null;
+  const [session, setSession] = useState(() => {
+    try {
+      const user = localStorage.getItem(USER_STORAGE_KEY);
+      const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+      return user && token ? { user: JSON.parse(user), token } : null;
+    } catch {
+      localStorage.removeItem(USER_STORAGE_KEY);
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      return null;
+    }
   });
 
-  const loginAsDemo = () => {
-    const demoUser = {
-      name: 'Emmanuel',
-      email: 'emmanuel@pulsegrid.dev',
-      avatar:
-        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150',
-      role: 'Core Architect (Community Plan)',
-    };
-    setUser(demoUser);
-    localStorage.setItem('pulsegrid-user', JSON.stringify(demoUser));
+  const authenticate = async (endpoint, credentials) => {
+    const response = await fetch(`${API_BASE_URL}/api/auth/${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credentials),
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Authentication failed.');
+    }
+    if (!data.user || !data.token) {
+      throw new Error('The server returned an invalid authentication response.');
+    }
+
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data.user));
+    localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+    setSession({ user: data.user, token: data.token });
+    return data.user;
   };
 
-  const loginWithEmail = (email, displayName = '') => {
-    const newUser = {
-      name: displayName.trim() || email.split('@')[0],
-      email: email,
-      avatar: null,
-      role: 'Developer (Preview)',
-    };
-    setUser(newUser);
-    localStorage.setItem('pulsegrid-user', JSON.stringify(newUser));
-  };
+  const login = (email, password) =>
+    authenticate('login', { email, password });
+
+  const register = (name, email, password) =>
+    authenticate('register', { name, email, password });
 
   const logout = () => {
-    setUser(null);
-    localStorage.removeItem('pulsegrid-user');
+    setSession(null);
+    localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+  };
+
+  const value = {
+    user: session?.user ?? null,
+    token: session?.token ?? null,
+    login,
+    register,
+    logout,
   };
 
   return (
-    <AuthContext.Provider value={{ user, loginAsDemo, loginWithEmail, logout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

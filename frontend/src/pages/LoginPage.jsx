@@ -8,7 +8,7 @@ const chartHeights = [34, 48, 40, 62, 53, 72, 58, 80, 66, 89, 72, 96];
 export const LoginPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, loginWithEmail } = useAuth();
+  const { user, login, register } = useAuth();
   const [mode, setMode] = useState(() =>
     new URLSearchParams(location.search).get('mode') === 'signup'
       ? 'signup'
@@ -19,10 +19,11 @@ export const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (user) return <Navigate to="/dashboard" replace />;
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
 
@@ -36,8 +37,19 @@ export const LoginPage = () => {
       return;
     }
 
-    loginWithEmail(email, mode === 'signup' ? name : '');
-    navigate(location.state?.from || '/dashboard', { replace: true });
+    setIsSubmitting(true);
+    try {
+      if (mode === 'signup') {
+        await register(name.trim(), email, password);
+      } else {
+        await login(email, password);
+      }
+      navigate(location.state?.from || '/dashboard', { replace: true });
+    } catch (authError) {
+      setError(authError.message || 'Unable to authenticate.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -187,15 +199,19 @@ export const LoginPage = () => {
                 {error}
               </p>
             )}
-            <button type="submit" className="auth-submit">
-              {mode === 'signup' ? 'Create account' : 'Sign in'}
+            <button
+              type="submit"
+              className="auth-submit"
+              disabled={isSubmitting}
+            >
+              {isSubmitting
+                ? 'Please wait…'
+                : mode === 'signup'
+                  ? 'Create account'
+                  : 'Sign in'}
             </button>
           </form>
 
-          <p className="auth-preview-note">
-            Preview mode: this form creates a local demo session only. No
-            credentials are sent to a server.
-          </p>
           <p className="auth-mode-prompt">
             {mode === 'signup'
               ? 'Already have an account?'
