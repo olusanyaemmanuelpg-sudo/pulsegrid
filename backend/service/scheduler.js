@@ -2,6 +2,8 @@ import { query } from '../config/db.js';
 import { proberHttp, probePostgres, probeRedis } from './prober.js';
 import { recordProbeResult } from './healthService.js';
 import { sendTelegramAlert } from './alertServices.js';
+import { ConsistentHashRing } from './hashRing.js';
+import { getActiveWorkers, MY_WORKER_ID } from './workerRegistry.js';
 
 let isProcessing = false;
 
@@ -120,11 +122,22 @@ export const runSchedulerCycle = async () => {
     );
 
     if (dueMonitors.length > 0) {
-      console.log(
-        `⏰ [Scheduler] Running automated checks for ${dueMonitors.length} due monitor(s)...`,
+      // 1. Discover active cluster workers and build the Hash Ring
+      const activeWorkers = await getActiveWorkers();
+      const hashRing = new ConsistentHashRing(activeWorkers);
+
+      // 2. Partition: Filter monitors that belong to THIS worker
+      const myMonitors = dueMonitors.filter((m) =>
+        hashRing.isAssignedToMe(m.id, MY_WORKER_ID),
       );
-      // Run all checks concurrently
-      await Promise.allSettled(dueMonitors.map(checkMonitor));
+
+      if (myMonitors.length > 0) {
+        console.log(
+          `⏰ [${MY_WORKER_ID}] Probing ${myMonitors.length}/${dueMonitors.length} assigned monitor(s) (Cluster size: ${activeWorkers.length} worker(s))...`,
+        );
+        // Run checks concurrently
+        await Promise.allSettled(myMonitors.map(checkMonitor));
+      }
     }
   } catch (err) {
     console.error('Scheduler cycle error:', err.message);

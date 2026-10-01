@@ -12,6 +12,7 @@ import { startScheduler } from './service/scheduler.js';
 import { getPublicStatus } from './controller/monitorController.js';
 import { createRateLimiter } from './middleware/rateLimiter.js';
 import { startTelemetryFlusher } from './service/telemetryFlusher.js';
+import { startWorkerHeartbeat } from './service/workerRegistry.js';
 dotenv.config();
 
 const app = express();
@@ -43,6 +44,7 @@ app.use(requireAuth);
 app.use('/api/monitors', monitorRoutes);
 
 initDb().then(() => {
+  startWorkerHeartbeat(); // Sends heartbeat to Redis cluster every 5s
   startScheduler(10000); // Ticks every 10 seconds
   startTelemetryFlusher(15000); // Flushes telemetry buffer every 15 seconds
 });

@@ -21,11 +21,29 @@ export const initDb = async () => {
       target TEXT NOT NULL,       -- URL or connection string
       check_interval INTEGER NOT NULL DEFAULT 30, -- In seconds (e.g. 30, 60, 300)
       keyword VARCHAR(100),       -- Optional keyword assertion for HTTP
+      heartbeat_secret VARCHAR(128),
       status VARCHAR(20) DEFAULT 'pending', -- 'up', 'down', 'pending'
       last_latency_ms INTEGER DEFAULT NULL,
       last_checked_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
+  `;
+
+  const addHeartbeatSecretColumnSQL = `
+    ALTER TABLE monitors
+      ADD COLUMN IF NOT EXISTS heartbeat_secret VARCHAR(128);
+  `;
+
+  const backfillHeartbeatSecretsSQL = `
+    UPDATE monitors
+    SET heartbeat_secret = SUBSTRING(MD5(RANDOM()::TEXT || id::TEXT || NOW()::TEXT), 1, 32)
+    WHERE heartbeat_secret IS NULL;
+  `;
+
+  const createHeartbeatSecretIndexSQL = `
+    CREATE UNIQUE INDEX IF NOT EXISTS monitors_heartbeat_secret_idx
+    ON monitors (heartbeat_secret)
+    WHERE heartbeat_secret IS NOT NULL;
   `;
 
   const createMonitorChecksTableSQL = `
@@ -44,6 +62,9 @@ export const initDb = async () => {
   try {
     await query(createUsersTableSQL);
     await query(createMonitorsTableSQL);
+    await query(addHeartbeatSecretColumnSQL);
+    await query(backfillHeartbeatSecretsSQL);
+    await query(createHeartbeatSecretIndexSQL);
     await query(createMonitorChecksTableSQL);
     await query(
       'UPDATE monitors SET check_interval = 30 WHERE check_interval IS NULL;',

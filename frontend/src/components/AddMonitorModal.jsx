@@ -11,11 +11,8 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
   const [keyword, setKeyword] = useState('');
   const [formError, setFormError] = useState('');
   const [copied, setCopied] = useState(false);
-  const [cronToken] = useState(() =>
-    Math.random().toString(36).substring(2, 7),
-  );
 
-  const generatedCronUrl = `https://pulsegrid.dev/ping/${name ? name.toLowerCase().replace(/[^a-z0-9]/g, '-') : 'my-cron'}-${cronToken}`;
+  const generatedCronUrl = `https://pulsegrid.dev/ping/${name ? name.toLowerCase().replace(/[^a-z0-9]/g, '-') : 'my-cron'}`;
 
   if (!isOpen) return null;
 
@@ -49,7 +46,9 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
     }
   };
   const handleCopyCron = () => {
-    navigator.clipboard.writeText(`curl -fsS ${generatedCronUrl}`);
+    navigator.clipboard.writeText(
+      'Create the monitor first, then copy the secure heartbeat command from the monitor card.',
+    );
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -213,16 +212,16 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
           {monitorType === 'cron' && (
             <div className="cron-setup-box">
               <p className="cron-desc">
-                Paste this one-line command at the end of your bash script, cron
-                job, or worker:
+                Save the monitor to generate a secure heartbeat URL with a
+                private token. Copy it from the dashboard card after creation.
               </p>
               <div className="code-snippet-box">
-                <code>curl -fsS {generatedCronUrl}</code>
+                <code>save monitor → copy tokenized heartbeat command</code>
                 <button
                   type="button"
                   className="btn-copy"
                   onClick={handleCopyCron}
-                  title="Copy command"
+                  title="Copy setup note"
                 >
                   {copied ? <Check size={16} /> : <Copy size={16} />}
                 </button>

@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { Globe, Database, Server, Clock, RefreshCw, Trash2, AlertTriangle } from './Icons';
+import {
+  Globe,
+  Database,
+  Server,
+  Clock,
+  RefreshCw,
+  Trash2,
+  AlertTriangle,
+} from './Icons';
 import { useMonitors } from '../context/MonitorContext';
 
 const API_BASE_URL = (
@@ -21,8 +29,12 @@ export const MonitorCard = ({ monitor }) => {
   };
 
   const handleCopyHeartbeat = () => {
-    const cmd = `curl -fsS ${API_BASE_URL}/api/heartbeat/${monitor.id}`;
-    navigator.clipboard.writeText(cmd);
+    const heartbeatToken = monitor.heartbeat_secret;
+    const command = heartbeatToken
+      ? `curl -fsS "${API_BASE_URL}/api/heartbeat/${monitor.id}?token=${heartbeatToken}"`
+      : `curl -fsS ${API_BASE_URL}/api/heartbeat/${monitor.id}`;
+
+    navigator.clipboard.writeText(command);
     setCopiedHeartbeat(true);
     setTimeout(() => setCopiedHeartbeat(false), 2000);
   };
@@ -106,7 +118,8 @@ export const MonitorCard = ({ monitor }) => {
         <div className="card-outage-alert">
           <AlertTriangle size={15} />
           <span>
-            {monitor.error || 'Outage detected across worker verification nodes.'}
+            {monitor.error ||
+              'Outage detected across worker verification nodes.'}
           </span>
         </div>
       )}
@@ -115,7 +128,9 @@ export const MonitorCard = ({ monitor }) => {
       <div className="card-metrics-grid">
         <div className="metric-box">
           <span className="metric-label">Latency</span>
-          <span className="metric-val">{isUp ? `${monitor.latency} ms` : '—'}</span>
+          <span className="metric-val">
+            {isUp ? `${monitor.latency} ms` : '—'}
+          </span>
         </div>
         <div className="metric-box">
           <span className="metric-label">90-Day Uptime</span>
@@ -127,8 +142,8 @@ export const MonitorCard = ({ monitor }) => {
             {monitor.interval >= 86400
               ? '24h'
               : monitor.interval >= 3600
-              ? '1h'
-              : `${monitor.interval}s`}
+                ? '1h'
+                : `${monitor.interval}s`}
           </span>
         </div>
         <div className="metric-box">
@@ -140,7 +155,9 @@ export const MonitorCard = ({ monitor }) => {
       {/* Visual Uptime Bar (Accurate Check History Timeline) */}
       <div className="uptime-strip-container">
         <div className="uptime-strip-header">
-          <span className="strip-title">Recent Check History (Last 30 probes)</span>
+          <span className="strip-title">
+            Recent Check History (Last 30 probes)
+          </span>
           <span
             className={`strip-stat font-mono ${successPercentage < 100 && checkCount > 0 ? 'text-red' : ''}`}
           >
@@ -179,7 +196,11 @@ export const MonitorCard = ({ monitor }) => {
         <div className="card-cron-snippet">
           <span className="cron-snippet-label">Heartbeat Ping URL:</span>
           <div className="cron-snippet-cmd">
-            <code>curl -fsS {API_BASE_URL}/api/heartbeat/{monitor.id}</code>
+            <code>
+              {monitor.heartbeat_secret
+                ? `curl -fsS "${API_BASE_URL}/api/heartbeat/${monitor.id}?token=${monitor.heartbeat_secret}"`
+                : `curl -fsS ${API_BASE_URL}/api/heartbeat/${monitor.id}`}
+            </code>
             <button
               type="button"
               className="btn-copy-mini"

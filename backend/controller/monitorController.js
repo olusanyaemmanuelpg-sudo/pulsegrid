@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { query } from '../config/db.js';
 import { redis } from '../config/redis.js';
 import { proberHttp, probePostgres, probeRedis } from '../service/prober.js';
@@ -44,20 +45,39 @@ export const createMonitor = async (req, res) => {
   const userId = req.user.id;
 
   try {
+    const heartbeatSecret =
+      type === 'cron' ? randomBytes(32).toString('hex') : null;
+
     const { rows } = await query(
+      type === 'cron'
+        ? `
+        INSERT INTO monitors (user_id, name, type, target, check_interval, keyword, heartbeat_secret)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *;
       `
+        : `
         INSERT INTO monitors (user_id, name, type, target, check_interval, keyword)
         VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING *;
-    `,
-      [
-        userId,
-        name.trim(),
-        type,
-        target.trim(),
-        checkInterval,
-        normalizedKeyword,
-      ],
+      `,
+      type === 'cron'
+        ? [
+            userId,
+            name.trim(),
+            type,
+            target.trim(),
+            checkInterval,
+            normalizedKeyword,
+            heartbeatSecret,
+          ]
+        : [
+            userId,
+            name.trim(),
+            type,
+            target.trim(),
+            checkInterval,
+            normalizedKeyword,
+          ],
     );
 
     const created = {
