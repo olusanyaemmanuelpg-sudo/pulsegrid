@@ -11,6 +11,7 @@ import heartbeatRoutes from './routes/heartbeatRoute.js';
 import { startScheduler } from './service/scheduler.js';
 import { getPublicStatus } from './controller/monitorController.js';
 import { createRateLimiter } from './middleware/rateLimiter.js';
+import { startTelemetryFlusher } from './service/telemetryFlusher.js';
 dotenv.config();
 
 const app = express();
@@ -43,6 +44,7 @@ app.use('/api/monitors', monitorRoutes);
 
 initDb().then(() => {
   startScheduler(10000); // Ticks every 10 seconds
+  startTelemetryFlusher(15000); // Flushes telemetry buffer every 15 seconds
 });
 
 app.listen(port, () => {

@@ -1,5 +1,4 @@
 import { redis } from '../config/redis.js';
-import { query } from '../config/db.js';
 
 export const recordProbeResult = async (monitor, probeResult) => {
   if (!monitor?.id || !['up', 'down'].includes(probeResult?.status)) {
@@ -10,35 +9,26 @@ export const recordProbeResult = async (monitor, probeResult) => {
   const lastChecked = Date.now();
   const previousStatus = await redis.hget(key, 'status');
 
-  // Persist check telemetry to PostgreSQL
-  void query(
-    'INSERT INTO monitor_checks (monitor_id, status, latency_ms, error) VALUES ($1, $2, $3, $4)',
-    [
-      monitor.id,
-      probeResult.status,
-      probeResult.latency || 0,
-      probeResult.error || null,
-    ],
-  ).catch((e) =>
-    console.error(
-      `Failed to record check telemetry for monitor ${monitor.id}:`,
-      e.message,
-    ),
-  );
+  const checkRecord = {
+    monitor_id: monitor.id,
+    status: probeResult.status,
+    latency_ms: probeResult.latency || 0,
+    error: probeResult.error || null,
+    created_at: new Date(lastChecked).toISOString(),
+  };
 
-  // Maintain fast 30-item ring buffer in Redis
+  // 1. Maintain fast 30-item in-memory ring buffer for the dashboard
   void redis
-    .lpush(
-      `monitor:${monitor.id}:checks`,
-      JSON.stringify({
-        status: probeResult.status,
-        latency_ms: probeResult.latency || 0,
-        error: probeResult.error || null,
-        created_at: new Date(lastChecked).toISOString(),
-      }),
-    )
+    .lpush(`monitor:${monitor.id}:checks`, JSON.stringify(checkRecord))
     .then(() => redis.ltrim(`monitor:${monitor.id}:checks`, 0, 29))
     .catch(() => {});
+
+  // 2. Push to Write-Behind Buffer (queued for bulk database flush)
+  void redis
+    .rpush('telemetry:buffer', JSON.stringify(checkRecord))
+    .catch((e) =>
+      console.error('Failed to buffer telemetry in Redis:', e.message),
+    );
 
   if (probeResult.status === 'up') {
     await redis.hmset(key, {

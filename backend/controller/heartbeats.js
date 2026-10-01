@@ -36,22 +36,23 @@ export const receiveHeartbeat = async (req, res) => {
       last_checked: Date.now(),
     });
 
-    void query(
-      'INSERT INTO monitor_checks (monitor_id, status, latency_ms, error) VALUES ($1, $2, $3, $4)',
-      [monitorId, 'up', 0, null],
-    ).catch(() => {});
+    const checkRecord = {
+      monitor_id: monitorId,
+      status: 'up',
+      latency_ms: 0,
+      error: null,
+      created_at: new Date().toISOString(),
+    };
 
+    // Buffer in Redis ring buffer for dashboard
     void redis
-      .lpush(
-        `monitor:${monitorId}:checks`,
-        JSON.stringify({
-          status: 'up',
-          latency_ms: 0,
-          error: null,
-          created_at: new Date().toISOString(),
-        }),
-      )
+      .lpush(`monitor:${monitorId}:checks`, JSON.stringify(checkRecord))
       .then(() => redis.ltrim(`monitor:${monitorId}:checks`, 0, 29))
+      .catch(() => {});
+
+    // Queue for Write-Behind batch database flush
+    void redis
+      .rpush('telemetry:buffer', JSON.stringify(checkRecord))
       .catch(() => {});
 
     if (monitor.status === 'down') {
