@@ -1,5 +1,6 @@
 import { query } from '../config/db.js';
 import { redis } from '../config/redis.js';
+import { sendTelegramAlert } from '../service/alertServices.js';
 
 export const receiveHeartbeat = async (req, res) => {
   const { id } = req.params;
@@ -11,13 +12,16 @@ export const receiveHeartbeat = async (req, res) => {
 
   try {
     const { rows } = await query(
-      "SELECT id FROM monitors WHERE id = $1 AND type = 'cron';",
+      `SELECT id, name, type, target, status
+       FROM monitors
+       WHERE id = $1 AND type = 'cron';`,
       [monitorId],
     );
 
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Cron monitor not found.' });
     }
+    const monitor = rows[0];
 
     await query(
       `UPDATE monitors
@@ -31,6 +35,14 @@ export const receiveHeartbeat = async (req, res) => {
       consecutive_fails: 0,
       last_checked: Date.now(),
     });
+
+    if (monitor.status === 'down') {
+      void sendTelegramAlert({
+        monitor,
+        eventType: 'recovery',
+        latency: 0,
+      });
+    }
 
     return res.status(200).json({
       status: 'ok',

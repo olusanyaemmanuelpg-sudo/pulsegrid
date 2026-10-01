@@ -7,6 +7,7 @@ export const recordProbeResult = async (monitor, probeResult) => {
 
   const key = `monitor:${monitor.id}`;
   const lastChecked = Date.now();
+  const previousStatus = await redis.hget(key, 'status');
 
   if (probeResult.status === 'up') {
     await redis.hmset(key, {
@@ -16,7 +17,11 @@ export const recordProbeResult = async (monitor, probeResult) => {
       consecutive_fails: 0,
     });
 
-    return { finalStatus: 'up', shouldAlert: false };
+    return {
+      finalStatus: 'up',
+      shouldAlert: false,
+      shouldRecover: previousStatus === 'down',
+    };
   }
 
   const fails = await redis.hincrby(key, 'consecutive_fails', 1);
@@ -32,5 +37,6 @@ export const recordProbeResult = async (monitor, probeResult) => {
   return {
     finalStatus,
     shouldAlert: fails === 3,
+    shouldRecover: false,
   };
 };

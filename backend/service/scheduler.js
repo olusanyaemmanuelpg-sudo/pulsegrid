@@ -1,6 +1,7 @@
 import { query } from '../config/db.js';
 import { proberHttp, probePostgres, probeRedis } from './prober.js';
 import { recordProbeResult } from './healthService.js';
+import { sendTelegramAlert } from './alertServices.js';
 
 let isProcessing = false;
 
@@ -55,6 +56,17 @@ export const checkMonitor = async (monitor) => {
       console.log(
         `🚨 [ALERT TRIGGERED] Monitor "${monitor.name}" (${monitor.target}) is CONFIRMED DOWN! Strike 3 reached.`,
       );
+      void sendTelegramAlert({
+        monitor,
+        eventType: 'down',
+        error: probeResult.error,
+      });
+    } else if (antiFlap.shouldRecover) {
+      void sendTelegramAlert({
+        monitor,
+        eventType: 'recovery',
+        latency: probeResult.latency,
+      });
     }
   } catch (error) {
     console.error(`Error checking monitor ${monitor.id}:`, error.message);
