@@ -10,6 +10,7 @@ import monitorRoutes from './routes/monitors.js';
 import heartbeatRoutes from './routes/heartbeatRoute.js';
 import { startScheduler } from './service/scheduler.js';
 import { getPublicStatus } from './controller/monitorController.js';
+import { createRateLimiter } from './middleware/rateLimiter.js';
 dotenv.config();
 
 const app = express();
@@ -25,9 +26,16 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+const authLimiter = createRateLimiter({
+  prefix: 'auth',
+  windowMs: 60 * 1000, // 1 minute
+  max: 5, // Limit each IP to 5 requests per windowMs
+});
+
 app.get('/api/status', getPublicStatus);
-app.use('/api/auth/register', registerRouter);
-app.use('/api/auth/login', loginRouter);
+app.use('/api/auth/register', authLimiter, registerRouter);
+app.use('/api/auth/login', authLimiter, loginRouter);
 app.use('/api/heartbeat', heartbeatRoutes);
 
 app.use(requireAuth);
