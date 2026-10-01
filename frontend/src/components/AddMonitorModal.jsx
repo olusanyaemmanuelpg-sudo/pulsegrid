@@ -11,41 +11,43 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
   const [keyword, setKeyword] = useState('');
   const [formError, setFormError] = useState('');
   const [copied, setCopied] = useState(false);
-  const [cronToken] = useState(() => Math.random().toString(36).substring(2, 7));
+  const [cronToken] = useState(() =>
+    Math.random().toString(36).substring(2, 7),
+  );
 
   const generatedCronUrl = `https://pulsegrid.dev/ping/${name ? name.toLowerCase().replace(/[^a-z0-9]/g, '-') : 'my-cron'}-${cronToken}`;
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim()) return;
+    setFormError('');
 
     let finalTarget = target;
     if (monitorType === 'cron') {
       finalTarget = generatedCronUrl;
     }
 
-    const added = addMonitor({
-      name,
-      type: monitorType,
-      target: finalTarget,
-      interval: Number(interval),
-      keyword: keyword.trim() || undefined
-    });
-    if (!added) {
-      setFormError('A monitor with these settings already exists.');
-      return;
+    try {
+      await addMonitor({
+        name: name.trim(),
+        type: monitorType,
+        target: finalTarget.trim(),
+        interval: Number(interval),
+        keyword: keyword.trim() || undefined,
+      });
+
+      // Reset form on success
+      setName('');
+      setTarget('');
+      setKeyword('');
+      setFormError('');
+      onClose();
+    } catch (err) {
+      setFormError(err.message || 'Failed to create monitor.');
     }
-
-    // Reset form
-    setName('');
-    setTarget('');
-    setKeyword('');
-    setFormError('');
-    onClose();
   };
-
   const handleCopyCron = () => {
     navigator.clipboard.writeText(`curl -fsS ${generatedCronUrl}`);
     setCopied(true);
@@ -60,10 +62,13 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
           <div>
             <h2 className="modal-title">Add Infrastructure Monitor</h2>
             <p className="modal-subtitle">
-              Distributed checking across worker ring with 3-strike verification.
+              Distributed checking across worker ring with 3-strike
+              verification.
             </p>
           </div>
-          <button className="btn-close" onClick={onClose}>✕</button>
+          <button className="btn-close" onClick={onClose}>
+            ✕
+          </button>
         </div>
 
         {/* Type Selector Tabs */}
@@ -107,7 +112,11 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="modal-form">
-          {formError && <p className="auth-error" role="alert">{formError}</p>}
+          {formError && (
+            <p className="auth-error" role="alert">
+              {formError}
+            </p>
+          )}
           <div className="form-group">
             <label className="form-label">Monitor Friendly Name</label>
             <input
@@ -137,7 +146,10 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
               <div className="form-group">
                 <label className="form-label">
                   Keyword Assertion (Optional)
-                  <span className="label-tip">Verifies page contains text (prevents false 200s on error pages)</span>
+                  <span className="label-tip">
+                    Verifies page contains text (prevents false 200s on error
+                    pages)
+                  </span>
                 </label>
                 <input
                   type="text"
@@ -164,7 +176,10 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
                 />
                 <div className="security-note">
                   <Shield size={14} />
-                  <span>Encrypted at rest with AES-256. Tested via <code>SELECT 1;</code> query.</span>
+                  <span>
+                    Encrypted at rest with AES-256. Tested via{' '}
+                    <code>SELECT 1;</code> query.
+                  </span>
                 </div>
               </div>
             </>
@@ -173,7 +188,9 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
           {monitorType === 'redis' && (
             <>
               <div className="form-group">
-                <label className="form-label">Redis Connection String or Host</label>
+                <label className="form-label">
+                  Redis Connection String or Host
+                </label>
                 <input
                   type="text"
                   className="form-input"
@@ -184,7 +201,10 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
                 />
                 <div className="security-note">
                   <Shield size={14} />
-                  <span>Tested via RESP <code>PING</code> command. Verifies memory usage.</span>
+                  <span>
+                    Tested via RESP <code>PING</code> command. Verifies memory
+                    usage.
+                  </span>
                 </div>
               </div>
             </>
@@ -193,7 +213,8 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
           {monitorType === 'cron' && (
             <div className="cron-setup-box">
               <p className="cron-desc">
-                Paste this one-line command at the end of your bash script, cron job, or worker:
+                Paste this one-line command at the end of your bash script, cron
+                job, or worker:
               </p>
               <div className="code-snippet-box">
                 <code>curl -fsS {generatedCronUrl}</code>
@@ -207,7 +228,8 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
                 </button>
               </div>
               <span className="cron-footnote">
-                If our engine doesn't receive a heartbeat within the chosen schedule + 10m grace period, we alert you!
+                If our engine doesn't receive a heartbeat within the chosen
+                schedule + 10m grace period, we alert you!
               </span>
             </div>
           )}

@@ -1,143 +1,174 @@
-import React, { createContext, useContext, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+} from 'react';
+import { useAuth } from './AuthContext';
 
 const MonitorContext = createContext();
 
-const initialMonitors = [
-  {
-    id: 'mon-1',
-    name: 'Production API (Railway)',
-    type: 'http',
-    target: 'https://api.myfintech.railway.app/health',
-    status: 'up',
-    latency: 84,
-    uptime90d: 99.98,
-    interval: 30,
-    lastChecked: 'Just now',
-    history: [95, 82, 88, 76, 92, 84, 80, 78, 85, 84],
-    consecutiveFails: 0,
-  },
-  {
-    id: 'mon-2',
-    name: 'Primary PostgreSQL Cluster',
-    type: 'postgres',
-    target: 'postgresql://db.railway.internal:5432/main',
-    status: 'up',
-    latency: 18,
-    uptime90d: 100.0,
-    interval: 60,
-    lastChecked: '1m ago',
-    history: [22, 19, 18, 17, 20, 19, 18, 18, 19, 18],
-    consecutiveFails: 0,
-  },
-  {
-    id: 'mon-3',
-    name: 'Session Cache (Redis)',
-    type: 'redis',
-    target: 'redis://cache.railway.internal:6379',
-    status: 'up',
-    latency: 4,
-    uptime90d: 99.95,
-    interval: 30,
-    lastChecked: 'Just now',
-    history: [5, 4, 4, 3, 5, 4, 4, 4, 3, 4],
-    consecutiveFails: 0,
-  },
-  {
-    id: 'mon-4',
-    name: 'Midnight DB Backup (Cron)',
-    type: 'cron',
-    target: 'https://pulsegrid.dev/ping/backup-7f89b',
-    status: 'up',
-    latency: 0,
-    uptime90d: 100.0,
-    interval: 86400,
-    lastChecked: '4h ago',
-    history: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    consecutiveFails: 0,
-  },
-  {
-    id: 'mon-5',
-    name: 'Landing Page (Netlify CDN)',
-    type: 'http',
-    target: 'https://myfintech.netlify.app',
-    status: 'down',
-    latency: 0,
-    uptime90d: 98.42,
-    interval: 60,
-    lastChecked: '30s ago',
-    history: [110, 115, 0, 0, 0, 0, 0, 0, 0, 0],
-    consecutiveFails: 3,
-    error: '502 Bad Gateway: Bandwidth Limit Exceeded',
-  },
-];
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+).replace(/\/+$/, '');
 
-const monitorIdentity = (monitor) =>
-  JSON.stringify([
-    monitor.name.trim().toLowerCase(),
-    monitor.type,
-    monitor.target.trim(),
-    Number(monitor.interval ?? 30),
-    monitor.keyword?.trim() ?? '',
-  ]);
+// Formats timestamp into "Just now", "2m ago", etc.
+const formatTimeAgo = (dateString) => {
+  if (!dateString) return 'Never';
+  const diffSec = Math.floor(
+    (Date.now() - new Date(dateString).getTime()) / 1000,
+  );
+  if (diffSec < 15) return 'Just now';
+  if (diffSec < 60) return `${diffSec}s ago`;
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+  return `${Math.floor(diffSec / 86400)}d ago`;
+};
+
+// Normalizes database row to frontend UI expectations
+const normalizeMonitor = (m) => ({
+  ...m,
+  latency: m.last_latency_ms ?? 0,
+  interval: m.check_interval ?? 30,
+  uptime90d: 100.0,
+  lastChecked: formatTimeAgo(m.last_checked_at),
+  history: Array.isArray(m.history) ? m.history : [m.last_latency_ms ?? 0],
+});
 
 export const MonitorProvider = ({ children }) => {
-  const [monitors, setMonitors] = useState(initialMonitors);
-  const knownMonitorIdentities = useRef(
-    new Set(initialMonitors.map(monitorIdentity)),
+  const { token } = useAuth();
+  const [monitors, setMonitors] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Fetch monitors from PostgreSQL via API
+  const fetchMonitors = useCallback(
+    async (isSilent = false) => {
+      if (!token) {
+        setMonitors([]);
+        return;
+      }
+
+      if (!isSilent) setLoading(true);
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/monitors`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to fetch monitors.');
+        }
+
+        setMonitors((data.monitors || []).map(normalizeMonitor));
+        setError(null);
+      } catch (err) {
+        console.error('Fetch monitors error:', err.message);
+        setError(err.message);
+      } finally {
+        if (!isSilent) setLoading(false);
+      }
+    },
+    [token],
   );
 
-  const addMonitor = (newMon) => {
-    const identity = monitorIdentity(newMon);
-    if (knownMonitorIdentities.current.has(identity)) return false;
+  // Initial load + 10s auto-refresh polling
+  useEffect(() => {
+    fetchMonitors();
 
-    knownMonitorIdentities.current.add(identity);
-    const monitorObj = {
-      id: `mon-${Date.now()}`,
-      ...newMon,
-      status: 'up',
-      latency: Math.floor(Math.random() * 80) + 20,
-      uptime90d: 100.0,
-      lastChecked: 'Just now',
-      history: Array(10)
-        .fill(50)
-        .map(() => Math.floor(Math.random() * 60) + 30),
-      consecutiveFails: 0,
-    };
-    setMonitors((currentMonitors) => [monitorObj, ...currentMonitors]);
-    return true;
-  };
+    if (!token) return;
 
-  const deleteMonitor = (id) => {
-    const deletedMonitor = monitors.find((monitor) => monitor.id === id);
-    if (deletedMonitor) {
-      knownMonitorIdentities.current.delete(monitorIdentity(deletedMonitor));
+    const intervalId = setInterval(() => {
+      fetchMonitors(true); // Silent background refresh
+    }, 10000);
+
+    return () => clearInterval(intervalId);
+  }, [token, fetchMonitors]);
+
+  // Add Monitor (POST /api/monitors)
+  const addMonitor = async (newMon) => {
+    if (!token) throw new Error('You must be logged in to create a monitor.');
+
+    const response = await fetch(`${API_BASE_URL}/api/monitors`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(newMon),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to create monitor.');
     }
-    setMonitors((currentMonitors) =>
-      currentMonitors.filter((monitor) => monitor.id !== id),
-    );
+
+    const created = normalizeMonitor(data.monitor);
+    setMonitors((prev) => [created, ...prev]);
+    return created;
   };
 
-  const testMonitor = (id) => {
-    setMonitors(
-      monitors.map((m) => {
-        if (m.id === id) {
-          const isUp = Math.random() > 0.15; // 85% chance up
-          const newLatency = isUp ? Math.floor(Math.random() * 90) + 15 : 0;
-          return {
-            ...m,
-            status: isUp ? 'up' : 'down',
-            latency: newLatency,
-            lastChecked: 'Just now',
-            history: [...m.history.slice(1), newLatency],
-            error: isUp ? null : 'Connection Timed Out (> 3000ms)',
-          };
-        }
-        return m;
-      }),
-    );
+  // Delete Monitor (DELETE /api/monitors/:id)
+  const deleteMonitor = async (id) => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/monitors/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || 'Failed to delete monitor.');
+      }
+
+      setMonitors((prev) => prev.filter((m) => m.id !== id));
+    } catch (err) {
+      console.error('Delete monitor error:', err.message);
+    }
   };
 
-  // Metrics
+  // Test Monitor On-Demand (POST /api/monitors/:id/test)
+  const testMonitor = async (id) => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/monitors/${id}/test`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || 'On-demand test failed.');
+      }
+
+      setMonitors((prev) =>
+        prev.map((m) =>
+          m.id === id
+            ? {
+                ...m,
+                ...normalizeMonitor(data.monitor),
+                error: data.error,
+              }
+            : m,
+        ),
+      );
+    } catch (err) {
+      console.error('Test monitor error:', err.message);
+    }
+  };
+
+  // Metrics calculations
   const totalMonitors = monitors.length;
   const upMonitors = monitors.filter((m) => m.status === 'up').length;
   const downMonitors = monitors.filter((m) => m.status === 'down').length;
@@ -157,6 +188,9 @@ export const MonitorProvider = ({ children }) => {
     <MonitorContext.Provider
       value={{
         monitors,
+        loading,
+        error,
+        fetchMonitors,
         addMonitor,
         deleteMonitor,
         testMonitor,
