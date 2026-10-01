@@ -1,3 +1,5 @@
+import Redis from 'ioredis';
+
 export const proberHttp = async (target, keyword = null) => {
   try {
     const startTime = performance.now();
@@ -28,5 +30,40 @@ export const proberHttp = async (target, keyword = null) => {
       latency: 0,
       error: err instanceof Error ? err.message : String(err),
     };
+  }
+};
+
+export const probeRedis = async (target) => {
+  let client;
+
+  try {
+    const start = performance.now();
+    client = new Redis(target, {
+      connectTimeout: 3000,
+      maxRetriesPerRequest: 1,
+      lazyConnect: true,
+      enableOfflineQueue: false,
+    });
+
+    await client.connect();
+    const response = await client.ping();
+
+    if (response !== 'PONG') {
+      throw new Error(`Unexpected Redis response: ${response}`);
+    }
+
+    return {
+      status: 'up',
+      latency: Math.round(performance.now() - start),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      status: 'down',
+      latency: 0,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    client?.disconnect();
   }
 };

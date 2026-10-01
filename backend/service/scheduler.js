@@ -1,12 +1,18 @@
 import { query } from '../config/db.js';
-import { proberHttp } from './prober.js';
+import { proberHttp, probeRedis } from './prober.js';
 import { recordProbeResult } from './healthService.js';
 
 let isProcessing = false;
 
 export const checkMonitor = async (monitor) => {
   try {
-    const probeResult = await proberHttp(monitor.target, monitor.keyword);
+    let probeResult;
+    if (monitor.type === 'redis') {
+      probeResult = await probeRedis(monitor.target, monitor.keyword);
+    } else {
+      probeResult = await proberHttp(monitor.target, monitor.keyword);
+    }
+
     const antiFlap = await recordProbeResult(monitor, probeResult);
     const persistedStatus =
       antiFlap.finalStatus === 'pending_down'
@@ -37,7 +43,7 @@ export const runSchedulerCycle = async () => {
   try {
     const { rows: dueMonitors } = await query(
       `SELECT * FROM monitors
-       WHERE type = 'http'
+       WHERE type IN ('http', 'redis')
          AND (last_checked_at IS NULL
            OR NOW() - last_checked_at >= (check_interval * INTERVAL '1 second'))
        LIMIT 50;`,
