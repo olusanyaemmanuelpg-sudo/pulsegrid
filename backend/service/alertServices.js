@@ -53,7 +53,6 @@ export const sendTelegramAlert = async ({
 
 <b>Service:</b> ${escapeHtml(monitor.name)}
 <b>Type:</b> <code>${escapeHtml(monitor.type.toUpperCase())}</code>
-<b>Target:</b> <code>${escapeHtml(monitor.target)}</code>
 <b>Status:</b> 🔴 <b>CONFIRMED DOWN</b> (Strike 3 reached)
 <b>Reason:</b> <i>${escapeHtml(error || 'Service unresponsive')}</i>
 <b>Time:</b> ${timestamp}
@@ -66,7 +65,6 @@ export const sendTelegramAlert = async ({
 
 <b>Service:</b> ${escapeHtml(monitor.name)}
 <b>Type:</b> <code>${escapeHtml(monitor.type.toUpperCase())}</code>
-<b>Target:</b> <code>${escapeHtml(monitor.target)}</code>
 <b>Status:</b> 🟢 <b>BACK ONLINE (UP)</b>
 <b>Latency:</b> ${latency}ms
 <b>Time:</b> ${timestamp}

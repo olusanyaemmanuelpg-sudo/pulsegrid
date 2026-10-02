@@ -56,21 +56,27 @@ app.use('/api/heartbeat', heartbeatRoutes);
 app.use(requireAuth);
 app.use('/api/monitors', monitorRoutes);
 
-initDb().then(() => {
+const startServer = async () => {
+  await initDb();
   startWorkerHeartbeat(); // Sends heartbeat to Redis cluster every 5s
   startScheduler(10000); // Ticks every 10 seconds
   startTelemetryFlusher(15000); // Flushes telemetry buffer every 15 seconds
-});
 
-app.listen(port, () => {
-  console.log(`🚀 PulseGrid API listening at http://localhost:${port}`);
-  console.log(
-    `📊 Database topology: ${isUsingDedicatedReplica ? 'read replica enabled' : 'primary-only mode (reads use primary)'}`,
-  );
-
-  query('SELECT 1')
-    .then(() => console.log('Database connected'))
-    .catch((error) =>
-      console.error('Database connection failed:', error.message),
+  app.listen(port, () => {
+    console.log(`🚀 PulseGrid API listening at http://localhost:${port}`);
+    console.log(
+      `📊 Database topology: ${isUsingDedicatedReplica ? 'read replica enabled' : 'primary-only mode (reads use primary)'}`,
     );
+
+    query('SELECT 1')
+      .then(() => console.log('Database connected'))
+      .catch((error) =>
+        console.error('Database connection failed:', error.message),
+      );
+  });
+};
+
+startServer().catch((error) => {
+  console.error('Backend startup failed:', error.message);
+  process.exitCode = 1;
 });

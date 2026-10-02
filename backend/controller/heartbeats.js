@@ -36,7 +36,7 @@ export const receiveHeartbeat = async (req, res) => {
 
   try {
     const { rows } = await query(
-      `SELECT id, name, type, target, status, heartbeat_secret
+      `SELECT id, name, type, status, heartbeat_secret
        FROM monitors
        WHERE id = $1 AND type = 'cron';`,
       [monitorId],

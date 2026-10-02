@@ -1,4 +1,37 @@
 import { query } from '../config/db.js';
+import {
+  assertMonitorTargetEncryptionKey,
+  decryptMonitorTarget,
+  encryptMonitorTarget,
+  fingerprintMonitorTarget,
+  isEncryptedMonitorTarget,
+} from '../security/monitorTargetSecurity.js';
+
+const migrateMonitorTargets = async () => {
+  assertMonitorTargetEncryptionKey();
+  const { rows } = await query(`
+    SELECT id, target, target_fingerprint
+    FROM monitors
+    WHERE target_fingerprint IS NULL OR target NOT LIKE 'enc:v1:%';
+  `);
+
+  for (const row of rows) {
+    const plaintext = isEncryptedMonitorTarget(row.target)
+      ? decryptMonitorTarget(row.target)
+      : row.target;
+    const encryptedTarget = isEncryptedMonitorTarget(row.target)
+      ? row.target
+      : encryptMonitorTarget(plaintext);
+    const fingerprint = fingerprintMonitorTarget(plaintext);
+
+    await query(
+      `UPDATE monitors
+       SET target = $1, target_fingerprint = $2
+       WHERE id = $3;`,
+      [encryptedTarget, fingerprint, row.id],
+    );
+  }
+};
 
 export const initDb = async () => {
   const createUsersTableSQL = `
@@ -19,6 +52,7 @@ export const initDb = async () => {
       name VARCHAR(120) NOT NULL,
       type VARCHAR(30) NOT NULL, -- 'http', 'postgres', 'mysql', 'redis', 'cron'
       target TEXT NOT NULL,       -- URL or connection string
+      target_fingerprint TEXT,
       check_interval INTEGER NOT NULL DEFAULT 30, -- In seconds (e.g. 30, 60, 300)
       keyword VARCHAR(100),       -- Optional keyword assertion for HTTP
       heartbeat_secret VARCHAR(128),
@@ -60,8 +94,12 @@ export const initDb = async () => {
   `;
 
   try {
+    assertMonitorTargetEncryptionKey();
     await query(createUsersTableSQL);
     await query(createMonitorsTableSQL);
+    await query(
+      'ALTER TABLE monitors ADD COLUMN IF NOT EXISTS target_fingerprint TEXT;',
+    );
     await query(addHeartbeatSecretColumnSQL);
     await query(backfillHeartbeatSecretsSQL);
     await query(createHeartbeatSecretIndexSQL);
@@ -90,13 +128,15 @@ export const initDb = async () => {
       WHERE monitors.id = ranked_monitors.id
         AND ranked_monitors.duplicate_rank > 1;
     `);
+    await query('DROP INDEX IF EXISTS monitors_unique_user_configuration_idx;');
+    await migrateMonitorTargets();
     await query(`
       CREATE UNIQUE INDEX IF NOT EXISTS monitors_unique_user_configuration_idx
       ON monitors (
         user_id,
         lower(btrim(name)),
         type,
-        btrim(target),
+        target_fingerprint,
         check_interval,
         COALESCE(NULLIF(btrim(keyword), ''), '')
       );
@@ -106,5 +146,6 @@ export const initDb = async () => {
     );
   } catch (err) {
     console.error('❌ Failed to initialize database table:', err.message);
+    throw err;
   }
 };

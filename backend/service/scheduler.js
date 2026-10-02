@@ -4,11 +4,17 @@ import { recordProbeResult } from './healthService.js';
 import { sendTelegramAlert } from './alertServices.js';
 import { ConsistentHashRing } from './hashRing.js';
 import { getActiveWorkers, MY_WORKER_ID } from './workerRegistry.js';
+import { decryptMonitorTarget } from '../security/monitorTargetSecurity.js';
+import { sanitizeProbeError } from './prober.js';
 
 let isProcessing = false;
 
-export const checkMonitor = async (monitor) => {
+export const checkMonitor = async (storedMonitor) => {
   try {
+    const monitor = {
+      ...storedMonitor,
+      target: decryptMonitorTarget(storedMonitor.target),
+    };
     let probeResult;
     if (monitor.type === 'redis') {
       probeResult = await probeRedis(monitor.target, monitor.keyword);
@@ -58,7 +64,7 @@ export const checkMonitor = async (monitor) => {
 
     if (antiFlap.shouldAlert) {
       console.log(
-        `🚨 [ALERT TRIGGERED] Monitor "${monitor.name}" (${monitor.target}) is CONFIRMED DOWN! Strike 3 reached.`,
+        `🚨 [ALERT TRIGGERED] Monitor "${monitor.name}" is CONFIRMED DOWN! Strike 3 reached.`,
       );
       void sendTelegramAlert({
         monitor,
@@ -73,7 +79,10 @@ export const checkMonitor = async (monitor) => {
       });
     }
   } catch (error) {
-    console.error(`Error checking monitor ${monitor.id}:`, error.message);
+    console.error(
+      `Error checking monitor ${storedMonitor.id}:`,
+      sanitizeProbeError(error, storedMonitor.target),
+    );
   }
 };
 

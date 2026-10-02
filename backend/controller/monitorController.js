@@ -3,8 +3,29 @@ import { query, readQuery, writeQuery } from '../config/db.js';
 import { redis } from '../config/redis.js';
 import { proberHttp, probePostgres, probeRedis } from '../service/prober.js';
 import { recordProbeResult } from '../service/healthService.js';
+import {
+  decryptMonitorTarget,
+  encryptMonitorTarget,
+  fingerprintMonitorTarget,
+  getMonitorTargetPreview,
+} from '../security/monitorTargetSecurity.js';
+import {
+  TargetValidationError,
+  validateMonitorTarget,
+} from '../security/targetValidation.js';
 
 const monitorTypes = new Set(['http', 'postgres', 'mysql', 'redis', 'cron']);
+
+const toClientMonitor = (monitor) => {
+  const { target, target_fingerprint, ...safeMonitor } = monitor;
+  return {
+    ...safeMonitor,
+    target: getMonitorTargetPreview(
+      decryptMonitorTarget(target),
+      monitor.type,
+    ),
+  };
+};
 
 export const createMonitor = async (req, res) => {
   const { name, type, target, interval, keyword } = req.body ?? {};
@@ -45,50 +66,46 @@ export const createMonitor = async (req, res) => {
   const userId = req.user.id;
 
   try {
+    const plaintextTarget = target.trim();
+    await validateMonitorTarget(type, plaintextTarget);
+    const encryptedTarget = encryptMonitorTarget(plaintextTarget);
+    const targetFingerprint = fingerprintMonitorTarget(plaintextTarget);
     const heartbeatSecret =
       type === 'cron' ? randomBytes(32).toString('hex') : null;
 
     const { rows } = await query(
-      type === 'cron'
-        ? `
-        INSERT INTO monitors (user_id, name, type, target, check_interval, keyword, heartbeat_secret)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING *;
       `
-        : `
-        INSERT INTO monitors (user_id, name, type, target, check_interval, keyword)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO monitors (
+          user_id, name, type, target, target_fingerprint,
+          check_interval, keyword, heartbeat_secret
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING *;
       `,
-      type === 'cron'
-        ? [
-            userId,
-            name.trim(),
-            type,
-            target.trim(),
-            checkInterval,
-            normalizedKeyword,
-            heartbeatSecret,
-          ]
-        : [
-            userId,
-            name.trim(),
-            type,
-            target.trim(),
-            checkInterval,
-            normalizedKeyword,
-          ],
+      [
+        userId,
+        name.trim(),
+        type,
+        encryptedTarget,
+        targetFingerprint,
+        checkInterval,
+        normalizedKeyword,
+        heartbeatSecret,
+      ],
     );
 
-    const created = {
+    const created = toClientMonitor({
       ...rows[0],
       recent_checks: [],
-    };
+    });
 
     return res.status(201).json({
       monitor: created,
     });
   } catch (error) {
+    if (error instanceof TargetValidationError) {
+      return res.status(400).json({ message: error.message });
+    }
     if (error.code === '23505') {
       return res
         .status(409)
@@ -157,10 +174,10 @@ export const getMonitors = async (req, res) => {
           checks = dbChecks.reverse();
         }
 
-        return {
+        return toClientMonitor({
           ...monitor,
           recent_checks: checks,
-        };
+        });
       }),
     );
 
@@ -208,7 +225,10 @@ export const testMonitor = async (req, res) => {
     if (rows.length === 0)
       return res.status(404).json({ message: 'Monitor not found.' });
 
-    const monitor = rows[0];
+    const monitor = {
+      ...rows[0],
+      target: decryptMonitorTarget(rows[0].target),
+    };
     let result;
 
     if (monitor.type === 'redis') {
@@ -271,8 +291,10 @@ export const testMonitor = async (req, res) => {
 
     return res.status(200).json({
       monitor: {
-        ...updatedRows[0],
-        recent_checks: checkRows.reverse(),
+        ...toClientMonitor({
+          ...updatedRows[0],
+          recent_checks: checkRows.reverse(),
+        }),
       },
       finalStatus,
       shouldAlert,
@@ -348,10 +370,6 @@ export const getPublicStatus = async (req, res) => {
 
         return {
           ...mon,
-          target:
-            mon.type === 'http'
-              ? mon.target
-              : `${mon.type}://[protected-endpoint]`,
           recent_checks: checks,
         };
       }),
