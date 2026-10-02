@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { query } from '../config/db.js';
+import { query, readQuery, writeQuery } from '../config/db.js';
 import { redis } from '../config/redis.js';
 import { proberHttp, probePostgres, probeRedis } from '../service/prober.js';
 import { recordProbeResult } from '../service/healthService.js';
@@ -102,7 +102,7 @@ export const createMonitor = async (req, res) => {
 export const getMonitors = async (req, res) => {
   const userId = req.user.id;
   try {
-    const { rows } = await query(
+    const { rows } = await readQuery(
       `SELECT * FROM monitors WHERE user_id = $1 ORDER BY created_at DESC;`,
       [userId],
     );
@@ -135,7 +135,7 @@ export const getMonitors = async (req, res) => {
             .reverse();
         } else {
           // Cold-start fallback from PostgreSQL
-          const { rows: dbChecks } = await query(
+          const { rows: dbChecks } = await readQuery(
             `SELECT id, status, latency_ms, error, created_at
              FROM monitor_checks
              WHERE monitor_id = $1
@@ -286,7 +286,7 @@ export const testMonitor = async (req, res) => {
 
 export const getPublicStatus = async (req, res) => {
   try {
-    const { rows } = await query(`
+    const { rows } = await readQuery(`
       SELECT 
         m.id, 
         m.name, 
@@ -325,7 +325,7 @@ export const getPublicStatus = async (req, res) => {
             .filter(Boolean)
             .reverse();
         } else {
-          const { rows: dbChecks } = await query(
+          const { rows: dbChecks } = await readQuery(
             `SELECT id, status, latency_ms, error, created_at
              FROM monitor_checks
              WHERE monitor_id = $1
