@@ -8,6 +8,30 @@ const { Pool } = pg;
 const isProduction = process.env.NODE_ENV === 'production';
 const sslConfig = isProduction ? { rejectUnauthorized: false } : false;
 
+export const getReplicaConfig = () => {
+  const primaryConnectionString = process.env.DATABASE_URL || '';
+  const readConnectionString = (process.env.DATABASE_READ_URL || '').trim();
+
+  if (
+    !readConnectionString ||
+    readConnectionString === primaryConnectionString
+  ) {
+    return {
+      enabled: false,
+      readConnectionString: primaryConnectionString,
+      mode: 'primary-only',
+    };
+  }
+
+  return {
+    enabled: true,
+    readConnectionString,
+    mode: 'replica',
+  };
+};
+
+const replicaConfig = getReplicaConfig();
+
 // 1. PRIMARY WRITE POOL (Master Database)
 // Handles all INSERT, UPDATE, DELETE, and DDL operations
 export const writePool = new Pool({
@@ -19,17 +43,12 @@ export const writePool = new Pool({
 });
 
 // 2. READ REPLICA POOL (Follower / Read-Only Replica)
-// If DATABASE_READ_URL is not set, gracefully falls back to DATABASE_URL
-const readConnectionString =
-  process.env.DATABASE_READ_URL || process.env.DATABASE_URL;
-
-export const isUsingDedicatedReplica = Boolean(
-  process.env.DATABASE_READ_URL &&
-  process.env.DATABASE_READ_URL !== process.env.DATABASE_URL,
-);
+// If DATABASE_READ_URL is not set, the app intentionally uses the primary for reads.
+export const isUsingDedicatedReplica = replicaConfig.enabled;
 
 export const readPool = new Pool({
-  connectionString: readConnectionString,
+  connectionString:
+    replicaConfig.readConnectionString || process.env.DATABASE_URL,
   ssl: sslConfig,
   max: Number(process.env.DB_READ_POOL_SIZE || 20),
   idleTimeoutMillis: 30000,
@@ -42,21 +61,21 @@ export const readPool = new Pool({
 export const writeQuery = (text, params) => writePool.query(text, params);
 
 /**
- * Execute a read query on the Read Replica.
- * Resilient fallback: If the read replica fails or is temporarily unreachable,
- * it automatically fails over to the write pool so users never see a 500.
+ * Execute a read query on the Read Replica when a dedicated replica is configured.
+ * If no replica is configured, reads fall back to the primary to keep the app safe and predictable.
  */
 export const readQuery = async (text, params) => {
+  if (!isUsingDedicatedReplica) {
+    return await writePool.query(text, params);
+  }
+
   try {
     return await readPool.query(text, params);
   } catch (err) {
-    if (isUsingDedicatedReplica) {
-      console.warn(
-        `⚠️ [DB Read Replica] Read failed (${err.message}). Failing over to Primary Master...`,
-      );
-      return await writePool.query(text, params);
-    }
-    throw err;
+    console.warn(
+      `⚠️ [DB Read Replica] Read failed (${err.message}). Failing over to Primary Master...`,
+    );
+    return await writePool.query(text, params);
   }
 };
 

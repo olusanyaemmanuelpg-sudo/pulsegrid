@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { query } from './config/db.js';
+import { query, isUsingDedicatedReplica } from './config/db.js';
 import { initDb } from './model/initDb.js';
 import registerRouter from './routes/register.js';
 import loginRouter from './routes/login.js';
@@ -65,6 +65,9 @@ initDb().then(() => {
 
 app.listen(port, () => {
   console.log(`🚀 PulseGrid API listening at http://localhost:${port}`);
+  console.log(
+    `📊 Database topology: ${isUsingDedicatedReplica ? 'read replica enabled' : 'primary-only mode (reads use primary)'}`,
+  );
 
   query('SELECT 1')
     .then(() => console.log('Database connected'))
