@@ -53,3 +53,9 @@ Application checks complement firewall rules; they do not replace them.
 
 For local development, provide `POSTGRES_PASSWORD` and `REPLICATION_PASSWORD`
 in `docker/.env` using distinct generated values. Do not commit `.env` files.
+
+With existing Docker volumes, changing those Compose variables does not change
+the passwords already stored in PostgreSQL. Use `\password postgres` and
+`\password replicator` in a `psql` session, then set matching values in
+`docker/.env` and `backend/.env`. The init scripts only run automatically for
+an empty database volume; do not delete volumes to rotate passwords.

@@ -129,6 +129,9 @@ export const initDb = async () => {
         AND ranked_monitors.duplicate_rank > 1;
     `);
     await migrateMonitorTargets();
+    await query(
+      'ALTER TABLE monitors ALTER COLUMN target_fingerprint SET NOT NULL;',
+    );
     await query(`
       CREATE UNIQUE INDEX IF NOT EXISTS monitors_unique_user_fingerprint_idx
       ON monitors (

@@ -17,7 +17,7 @@ export const sanitizeProbeError = (error, target = '') => {
     ? message.replaceAll(target, '[redacted target]')
     : message;
   return withoutTarget.replace(
-    /(?:postgres(?:ql)?|rediss?|redis|https?):\/\/[^\s"'<>]+/gi,
+    /(?:postgres(?:ql)?|rediss?|redis|mysqls?|https?):\/\/[^\s"'<>]+/gi,
     '[redacted connection]',
   );
 };
@@ -112,6 +112,7 @@ export const probeRedis = async (target) => {
       connectTimeout: 3000,
       maxRetriesPerRequest: 1,
       lazyConnect: true,
+      enableReadyCheck: false,
       enableOfflineQueue: false,
       retryStrategy: () => null,
     });

@@ -38,3 +38,17 @@ test('target fingerprints are stable and previews omit credentials and paths', (
   assert.equal(preview, 'redis://example.com:6380/[redacted]');
   assert.doesNotMatch(preview, /probe|secret|token|hidden/);
 });
+
+test('target encryption refuses to run without a valid external key', () => {
+  const originalKey = process.env.MONITOR_TARGET_ENCRYPTION_KEY;
+  delete process.env.MONITOR_TARGET_ENCRYPTION_KEY;
+
+  try {
+    assert.throws(
+      () => encryptMonitorTarget('redis://cache.example.com'),
+      /MONITOR_TARGET_ENCRYPTION_KEY/,
+    );
+  } finally {
+    process.env.MONITOR_TARGET_ENCRYPTION_KEY = originalKey;
+  }
+});

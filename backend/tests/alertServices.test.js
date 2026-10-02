@@ -64,5 +64,8 @@ test('Telegram alert payload does not include connection targets', async () => {
     eventType: 'down',
   });
 
-  assert.doesNotMatch(sentMessage, /postgresql|probe|private-password|db\.example/);
+  assert.doesNotMatch(
+    sentMessage,
+    /postgresql|probe|private-password|db\.example/,
+  );
 });

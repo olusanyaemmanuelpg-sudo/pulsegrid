@@ -1,7 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { query, readQuery, writeQuery } from '../config/db.js';
 import { redis } from '../config/redis.js';
-import { proberHttp, probePostgres, probeRedis } from '../service/prober.js';
+import {
+  proberHttp,
+  probePostgres,
+  probeRedis,
+  sanitizeProbeError,
+} from '../service/prober.js';
 import { recordProbeResult } from '../service/healthService.js';
 import {
   decryptMonitorTarget,
@@ -27,6 +32,12 @@ const toClientMonitor = (monitor) => {
   };
 };
 
+const sanitizeCheckErrors = (checks) =>
+  checks.map((check) => ({
+    ...check,
+    error: check.error ? sanitizeProbeError(new Error(check.error)) : null,
+  }));
+
 export const createMonitor = async (req, res) => {
   const { name, type, target, interval, keyword } = req.body ?? {};
 
@@ -36,6 +47,7 @@ export const createMonitor = async (req, res) => {
     name.trim().length > 120 ||
     typeof target !== 'string' ||
     !target.trim() ||
+    target.trim().length > 2048 ||
     typeof type !== 'string' ||
     !monitorTypes.has(type) ||
     (keyword !== undefined && keyword !== null && typeof keyword !== 'string')
@@ -119,7 +131,7 @@ export const createMonitor = async (req, res) => {
 export const getMonitors = async (req, res) => {
   const userId = req.user.id;
   try {
-    const { rows } = await readQuery(
+    const { rows } = await writeQuery(
       `SELECT * FROM monitors WHERE user_id = $1 ORDER BY created_at DESC;`,
       [userId],
     );
@@ -150,6 +162,7 @@ export const getMonitors = async (req, res) => {
             })
             .filter(Boolean)
             .reverse();
+          checks = sanitizeCheckErrors(checks);
         } else {
           // Cold-start fallback from PostgreSQL
           const { rows: dbChecks } = await readQuery(
@@ -171,7 +184,7 @@ export const getMonitors = async (req, res) => {
             void fillPipe.exec().catch(() => {});
           }
 
-          checks = dbChecks.reverse();
+          checks = sanitizeCheckErrors(dbChecks.reverse());
         }
 
         return toClientMonitor({
@@ -293,7 +306,7 @@ export const testMonitor = async (req, res) => {
       monitor: {
         ...toClientMonitor({
           ...updatedRows[0],
-          recent_checks: checkRows.reverse(),
+          recent_checks: sanitizeCheckErrors(checkRows.reverse()),
         }),
       },
       finalStatus,
@@ -346,6 +359,7 @@ export const getPublicStatus = async (req, res) => {
             })
             .filter(Boolean)
             .reverse();
+          checks = sanitizeCheckErrors(checks);
         } else {
           const { rows: dbChecks } = await readQuery(
             `SELECT id, status, latency_ms, error, created_at
@@ -365,7 +379,7 @@ export const getPublicStatus = async (req, res) => {
             void fillPipe.exec().catch(() => {});
           }
 
-          checks = dbChecks.reverse();
+          checks = sanitizeCheckErrors(dbChecks.reverse());
         }
 
         return {
