@@ -8,11 +8,13 @@ import loginRouter from './routes/login.js';
 import requireAuth from './middleware/requireAuth.js';
 import monitorRoutes from './routes/monitors.js';
 import heartbeatRoutes from './routes/heartbeatRoute.js';
+import alertRoutes from './routes/alerts.js';
 import { startScheduler } from './service/scheduler.js';
 import { getPublicStatus } from './controller/monitorController.js';
 import { createRateLimiter } from './middleware/rateLimiter.js';
 import { startTelemetryFlusher } from './service/telemetryFlusher.js';
 import { startWorkerHeartbeat } from './service/workerRegistry.js';
+import { startAlertWorker } from './service/alertBroker.js';
 import { corsOptions } from './security/cors.js';
 dotenv.config();
 
@@ -55,12 +57,14 @@ app.use('/api/heartbeat', heartbeatRoutes);
 
 app.use(requireAuth);
 app.use('/api/monitors', monitorRoutes);
+app.use('/api/alerts', alertRoutes);
 
 const startServer = async () => {
   await initDb();
   startWorkerHeartbeat(); // Sends heartbeat to Redis cluster every 5s
   startScheduler(10000); // Ticks every 10 seconds
   startTelemetryFlusher(15000); // Flushes telemetry buffer every 15 seconds
+  startAlertWorker(1000); // Message broker consumer worker for multi-channel alerts
 
   app.listen(port, () => {
     console.log(`🚀 PulseGrid API listening at http://localhost:${port}`);

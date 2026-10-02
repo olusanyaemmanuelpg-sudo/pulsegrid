@@ -1,6 +1,7 @@
 import { query } from '../config/db.js';
 import { redis } from '../config/redis.js';
 import { sendTelegramAlert } from '../service/alertServices.js';
+import { publishAlertEvent } from '../service/alertBroker.js';
 
 export const validateHeartbeatToken = (storedToken, providedToken) => {
   const normalizedStored =
@@ -86,7 +87,7 @@ export const receiveHeartbeat = async (req, res) => {
       .catch(() => {});
 
     if (monitor.status === 'down') {
-      void sendTelegramAlert({
+      void publishAlertEvent({
         monitor,
         eventType: 'recovery',
         latency: 0,

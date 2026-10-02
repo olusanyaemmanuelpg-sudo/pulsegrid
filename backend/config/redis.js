@@ -8,7 +8,9 @@ const redisUrl = process.env.REDIS_URL;
 export const redis = new Redis(redisUrl, {
   // Prevent crash if Redis is temporarily unreachable
   maxRetriesPerRequest: 3,
+  lazyConnect: process.env.NODE_ENV === 'test',
   retryStrategy(times) {
+    if (process.env.NODE_ENV === 'test' || times > 5) return null;
     const delay = Math.min(times * 100, 3000);
     return delay;
   },

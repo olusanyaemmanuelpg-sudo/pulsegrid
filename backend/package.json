@@ -5,7 +5,7 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "test": "node --test",
+    "test": "NODE_ENV=test node --test",
     "start": "nodemon start",
     "dev": "nodemon start"
   },

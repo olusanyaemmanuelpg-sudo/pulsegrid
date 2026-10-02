@@ -2,6 +2,7 @@ import { query } from '../config/db.js';
 import { proberHttp, probePostgres, probeRedis } from './prober.js';
 import { recordProbeResult } from './healthService.js';
 import { sendTelegramAlert } from './alertServices.js';
+import { publishAlertEvent } from './alertBroker.js';
 import { ConsistentHashRing } from './hashRing.js';
 import { getActiveWorkers, MY_WORKER_ID } from './workerRegistry.js';
 import { decryptMonitorTarget } from '../security/monitorTargetSecurity.js';
@@ -66,13 +67,13 @@ export const checkMonitor = async (storedMonitor) => {
       console.log(
         `🚨 [ALERT TRIGGERED] Monitor "${monitor.name}" is CONFIRMED DOWN! Strike 3 reached.`,
       );
-      void sendTelegramAlert({
+      void publishAlertEvent({
         monitor,
         eventType: 'down',
         error: probeResult.error,
       });
     } else if (antiFlap.shouldRecover) {
-      void sendTelegramAlert({
+      void publishAlertEvent({
         monitor,
         eventType: 'recovery',
         latency: probeResult.latency,

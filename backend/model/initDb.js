@@ -93,10 +93,24 @@ export const initDb = async () => {
     ON monitor_checks (monitor_id, created_at DESC);
   `;
 
+  const createAlertChannelsTableSQL = `
+    CREATE TABLE IF NOT EXISTS alert_channels (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type VARCHAR(30) NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      config JSONB NOT NULL DEFAULT '{}'::jsonb,
+      is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_alert_channels_user ON alert_channels(user_id);
+  `;
+
   try {
     assertMonitorTargetEncryptionKey();
     await query(createUsersTableSQL);
     await query(createMonitorsTableSQL);
+    await query(createAlertChannelsTableSQL);
     await query(
       'ALTER TABLE monitors ADD COLUMN IF NOT EXISTS target_fingerprint TEXT;',
     );
