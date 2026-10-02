@@ -2553,10 +2553,15 @@
   }
   .dashboard-header-actions {
     width: 100%;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .dashboard-header-actions .btn-secondary {
-    flex: 1;
+    width: 100%;
+    white-space: nowrap;
+  }
+  .dashboard-header-actions .btn-primary {
+    grid-column: 1 / -1;
   }
   .metrics-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2592,9 +2597,28 @@
   .card-top {
     align-items: flex-start;
   }
+  .card-title-group {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .card-title-group > div:last-child {
+    flex: 1;
+    min-width: 0;
+  }
   .card-title-row {
     flex-wrap: wrap;
     gap: 0.35rem;
+  }
+  .card-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .card-target {
+    width: 100%;
+    max-width: 100%;
+  }
+  .card-actions {
+    flex: 0 0 auto;
   }
   .card-metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
