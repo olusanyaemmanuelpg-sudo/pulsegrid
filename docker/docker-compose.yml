@@ -1,0 +1,59 @@
+services:
+  primary:
+    image: postgres:15
+    container_name: pulsegrid-primary
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: pulsegrid
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - primary_data:/var/lib/postgresql/data
+      - ./postgres-primary:/docker-entrypoint-initdb.d:ro
+      - ./postgres-primary/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+      - -c
+      - wal_keep_size=1GB
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
+    networks:
+      - pulsegrid-net
+
+  replica:
+    image: postgres:15
+    container_name: pulsegrid-replica
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: pulsegrid
+      REPLICATION_PASSWORD: replica_password
+    ports:
+      - '127.0.0.1:5433:5432'
+    volumes:
+      - replica_data:/var/lib/postgresql/data
+      - ./postgres-replica/01-setup-replica.sh:/usr/local/bin/replica-entrypoint.sh:ro
+    entrypoint: ['/bin/bash', '/usr/local/bin/replica-entrypoint.sh']
+    command: ['postgres']
+    depends_on:
+      - primary
+    networks:
+      - pulsegrid-net
+
+volumes:
+  primary_data:
+  replica_data:
+    name: pulsegrid_replica_data_v2
+
+networks:
+  pulsegrid-net:
+    driver: bridge
