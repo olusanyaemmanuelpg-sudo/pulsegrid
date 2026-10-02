@@ -5,6 +5,7 @@ import { AuthProvider } from './context/AuthContext';
 import { MonitorProvider } from './context/MonitorContext';
 import { Navbar } from './components/Navbar';
 import { AddMonitorModal } from './components/AddMonitorModal';
+import { AlertChannelsModal } from './components/AlertChannelsModal';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -13,7 +14,7 @@ import { NotFoundPage } from './pages/NotFoundPage';
 import { useAuth } from './context/AuthContext';
 import './App.css';
 
-const ProtectedDashboard = ({ onOpenAddModal }) => {
+const ProtectedDashboard = ({ onOpenAddModal, onOpenAlertsModal }) => {
   const { user } = useAuth();
   const location = useLocation();
 
@@ -21,18 +22,27 @@ const ProtectedDashboard = ({ onOpenAddModal }) => {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
-  return <DashboardPage onOpenAddModal={onOpenAddModal} />;
+  return (
+    <DashboardPage
+      onOpenAddModal={onOpenAddModal}
+      onOpenAlertsModal={onOpenAlertsModal}
+    />
+  );
 };
 
 function App() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
 
   return (
     <ThemeProvider>
       <AuthProvider>
         <MonitorProvider>
           <div className="app-layout">
-            <Navbar onOpenAddModal={() => setIsAddModalOpen(true)} />
+            <Navbar
+              onOpenAddModal={() => setIsAddModalOpen(true)}
+              onOpenAlertsModal={() => setIsAlertsModalOpen(true)}
+            />
 
             <main className="main-content">
               <Routes>
@@ -43,6 +53,7 @@ function App() {
                   element={
                     <ProtectedDashboard
                       onOpenAddModal={() => setIsAddModalOpen(true)}
+                      onOpenAlertsModal={() => setIsAlertsModalOpen(true)}
                     />
                   }
                 />
@@ -54,6 +65,11 @@ function App() {
             <AddMonitorModal
               isOpen={isAddModalOpen}
               onClose={() => setIsAddModalOpen(false)}
+            />
+
+            <AlertChannelsModal
+              isOpen={isAlertsModalOpen}
+              onClose={() => setIsAlertsModalOpen(false)}
             />
           </div>
         </MonitorProvider>

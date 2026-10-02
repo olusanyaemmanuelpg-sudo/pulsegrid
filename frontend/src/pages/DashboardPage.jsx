@@ -12,10 +12,11 @@ import {
   AlertTriangle,
   CheckCircle,
   Download,
-  RefreshCw
+  RefreshCw,
+  Bell,
 } from '../components/Icons';
 
-export const DashboardPage = ({ onOpenAddModal }) => {
+export const DashboardPage = ({ onOpenAddModal, onOpenAlertsModal }) => {
   const { monitors, metrics, testMonitor } = useMonitors();
   const { user } = useAuth();
   const [filterType, setFilterType] = useState('all');
@@ -88,6 +89,14 @@ export const DashboardPage = ({ onOpenAddModal }) => {
         </div>
 
         <div className="dashboard-header-actions">
+          <button
+            className="btn-secondary"
+            onClick={onOpenAlertsModal}
+            title="Configure Asynchronous Multi-Channel Alert Broker"
+          >
+            <Bell size={15} />
+            <span>Alert Channels</span>
+          </button>
           <button
             className={`btn-secondary ${testingAll ? 'spinning' : ''}`}
             onClick={handleTestAll}

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router';
-import { Activity, Plus, Sun, Moon } from './Icons';
+import { Activity, Plus, Sun, Moon, Bell } from './Icons';
 import { useMonitors } from '../context/MonitorContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 
-export const Navbar = ({ onOpenAddModal }) => {
+export const Navbar = ({ onOpenAddModal, onOpenAlertsModal }) => {
   const location = useLocation();
   const { metrics } = useMonitors();
   const { theme, toggleTheme } = useTheme();
@@ -117,10 +117,21 @@ export const Navbar = ({ onOpenAddModal }) => {
           ) : user ? (
             <>
               {location.pathname === '/dashboard' ? (
-                <button className="btn-primary" onClick={onOpenAddModal}>
-                  <Plus size={16} />
-                  <span>Add monitor</span>
-                </button>
+                <>
+                  <button
+                    className="btn-secondary"
+                    onClick={onOpenAlertsModal}
+                    title="Configure Multi-Channel Alert Broker"
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                  >
+                    <Bell size={16} />
+                    <span>Alerts</span>
+                  </button>
+                  <button className="btn-primary" onClick={onOpenAddModal}>
+                    <Plus size={16} />
+                    <span>Add monitor</span>
+                  </button>
+                </>
               ) : (
                 <Link to="/dashboard" className="btn-primary">
                   <span>Dashboard →</span>
@@ -151,6 +162,16 @@ export const Navbar = ({ onOpenAddModal }) => {
                     >
                       Console Overview
                     </Link>
+                    <button
+                      className="dropdown-item"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        onOpenAlertsModal?.();
+                      }}
+                      style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer' }}
+                    >
+                      Alert Destinations
+                    </button>
                     <Link
                       to="/status"
                       className="dropdown-item"
