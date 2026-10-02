@@ -47,3 +47,22 @@ test('Telegram alert does not retry permanent API errors', async () => {
 
   assert.equal(attempts, 1);
 });
+
+test('Telegram alert payload does not include connection targets', async () => {
+  let sentMessage = '';
+  globalThis.fetch = async (_url, options) => {
+    sentMessage = JSON.parse(options.body).text;
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  };
+
+  await sendTelegramAlert({
+    monitor: {
+      ...monitor,
+      type: 'postgres',
+      target: 'postgresql://probe:private-password@db.example.com/app',
+    },
+    eventType: 'down',
+  });
+
+  assert.doesNotMatch(sentMessage, /postgresql|probe|private-password|db\.example/);
+});

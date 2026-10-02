@@ -180,6 +180,6 @@ export const probePostgres = async (target) => {
       error: sanitizeProbeError(error, target),
     };
   } finally {
-    client?.end();
+    await client?.end().catch(() => {});
   }
 };

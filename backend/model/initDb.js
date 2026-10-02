@@ -128,10 +128,9 @@ export const initDb = async () => {
       WHERE monitors.id = ranked_monitors.id
         AND ranked_monitors.duplicate_rank > 1;
     `);
-    await query('DROP INDEX IF EXISTS monitors_unique_user_configuration_idx;');
     await migrateMonitorTargets();
     await query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS monitors_unique_user_configuration_idx
+      CREATE UNIQUE INDEX IF NOT EXISTS monitors_unique_user_fingerprint_idx
       ON monitors (
         user_id,
         lower(btrim(name)),
@@ -141,6 +140,7 @@ export const initDb = async () => {
         COALESCE(NULLIF(btrim(keyword), ''), '')
       );
     `);
+    await query('DROP INDEX IF EXISTS monitors_unique_user_configuration_idx;');
     console.log(
       '✅ PostgreSQL: tables and monitor uniqueness verified successfully.',
     );

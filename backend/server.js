@@ -78,5 +78,5 @@ const startServer = async () => {
 
 startServer().catch((error) => {
   console.error('Backend startup failed:', error.message);
-  process.exitCode = 1;
+  process.exit(1);
 });

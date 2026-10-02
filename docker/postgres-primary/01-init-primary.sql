@@ -1,11 +1,3 @@
-ALTER SYSTEM SET wal_level = 'replica';
-ALTER SYSTEM SET max_wal_senders = '10';
-ALTER SYSTEM SET max_replication_slots = '10';
-ALTER SYSTEM SET wal_keep_size = '1GB';
-ALTER SYSTEM SET hot_standby = 'on';
-
-CREATE ROLE replicator WITH REPLICATION LOGIN PASSWORD 'replica_password';
-
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
@@ -23,6 +15,7 @@ CREATE TABLE IF NOT EXISTS monitors (
   target TEXT NOT NULL,
   check_interval INTEGER NOT NULL DEFAULT 30,
   keyword VARCHAR(100),
+  target_fingerprint TEXT,
   heartbeat_secret VARCHAR(128),
   status VARCHAR(20) DEFAULT 'pending',
   last_latency_ms INTEGER DEFAULT NULL,
@@ -39,12 +32,12 @@ CREATE TABLE IF NOT EXISTS monitor_checks (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS monitors_unique_user_configuration_idx
+CREATE UNIQUE INDEX IF NOT EXISTS monitors_unique_user_fingerprint_idx
 ON monitors (
   user_id,
   lower(btrim(name)),
   type,
-  btrim(target),
+  target_fingerprint,
   check_interval,
   COALESCE(NULLIF(btrim(keyword), ''), '')
 );
