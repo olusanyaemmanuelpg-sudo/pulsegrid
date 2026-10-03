@@ -50,6 +50,120 @@ services:
     networks:
       - pulsegrid-net
 
+  redis:
+    image: redis:7-alpine
+    container_name: pulsegrid-redis
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:6380:6379'
+    networks:
+      - pulsegrid-net
+
+  # ==========================================
+  # HORIZONTALLY SCALED WEB API TIER (STATELESS)
+  # ==========================================
+  api-1:
+    image: pulsegrid-backend:latest
+    container_name: pulsegrid-api-1
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      INSTANCE_ID: api-1
+      RUN_WORKERS: 'false'
+      NODE_ENV: production
+      DB_SSL: 'false'
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
+      DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@replica:5432/pulsegrid
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY}
+    depends_on:
+      - primary
+      - replica
+      - redis
+    networks:
+      - pulsegrid-net
+
+  api-2:
+    image: pulsegrid-backend:latest
+    container_name: pulsegrid-api-2
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      INSTANCE_ID: api-2
+      RUN_WORKERS: 'false'
+      NODE_ENV: production
+      DB_SSL: 'false'
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
+      DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@replica:5432/pulsegrid
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY}
+    depends_on:
+      - primary
+      - replica
+      - redis
+    networks:
+      - pulsegrid-net
+
+  # ==========================================
+  # HORIZONTALLY SCALED PROBER WORKER CLUSTER
+  # ==========================================
+  worker-1:
+    image: pulsegrid-backend:latest
+    container_name: pulsegrid-worker-1
+    restart: unless-stopped
+    command: ['node', 'worker.js']
+    environment:
+      WORKER_ID: worker-1
+      NODE_ENV: production
+      DB_SSL: 'false'
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
+      DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@replica:5432/pulsegrid
+      REDIS_URL: redis://redis:6379
+      MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY}
+    depends_on:
+      - primary
+      - redis
+    networks:
+      - pulsegrid-net
+
+  worker-2:
+    image: pulsegrid-backend:latest
+    container_name: pulsegrid-worker-2
+    restart: unless-stopped
+    command: ['node', 'worker.js']
+    environment:
+      WORKER_ID: worker-2
+      NODE_ENV: production
+      DB_SSL: 'false'
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
+      DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@replica:5432/pulsegrid
+      REDIS_URL: redis://redis:6379
+      MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY}
+    depends_on:
+      - primary
+      - redis
+    networks:
+      - pulsegrid-net
+
+  # ==========================================
+  # NGINX REVERSE PROXY & LOAD BALANCER (EDGE)
+  # ==========================================
+  loadbalancer:
+    image: nginx:alpine
+    container_name: pulsegrid-loadbalancer
+    restart: unless-stopped
+    ports:
+      - '80:80'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api-1
+      - api-2
+    networks:
+      - pulsegrid-net
+
 volumes:
   primary_data:
   replica_data:

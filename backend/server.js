@@ -20,10 +20,13 @@ dotenv.config();
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
+const INSTANCE_ID = process.env.INSTANCE_ID || `api-${process.pid}`;
+
 app.disable('x-powered-by');
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 app.use((req, res, next) => {
+  res.setHeader('X-Served-By', INSTANCE_ID);
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -38,6 +41,7 @@ app.use((req, res, next) => {
 app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
+    instance: INSTANCE_ID,
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
   });
@@ -61,13 +65,21 @@ app.use('/api/alerts', alertRoutes);
 
 const startServer = async () => {
   await initDb();
-  startWorkerHeartbeat(); // Sends heartbeat to Redis cluster every 5s
-  startScheduler(10000); // Ticks every 10 seconds
-  startTelemetryFlusher(15000); // Flushes telemetry buffer every 15 seconds
-  startAlertWorker(1000); // Message broker consumer worker for multi-channel alerts
+  const runWorkers = process.env.RUN_WORKERS !== 'false';
+
+  if (runWorkers) {
+    startWorkerHeartbeat(); // Sends heartbeat to Redis cluster every 5s
+    startScheduler(10000); // Ticks every 10 seconds
+    startTelemetryFlusher(15000); // Flushes telemetry buffer every 15 seconds
+    startAlertWorker(1000); // Message broker consumer worker for multi-channel alerts
+  } else {
+    console.log(
+      `🌐 [Web Tier API] Node "${INSTANCE_ID}" running in stateless API mode (Prober workers offloaded).`,
+    );
+  }
 
   app.listen(port, () => {
-    console.log(`🚀 PulseGrid API listening at http://localhost:${port}`);
+    console.log(`🚀 PulseGrid API [${INSTANCE_ID}] listening at http://localhost:${port}`);
     console.log(
       `📊 Database topology: ${isUsingDedicatedReplica ? 'read replica enabled' : 'primary-only mode (reads use primary)'}`,
     );

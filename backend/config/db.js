@@ -6,7 +6,17 @@ dotenv.config();
 const { Pool } = pg;
 
 const isProduction = process.env.NODE_ENV === 'production';
-const sslConfig = isProduction ? { rejectUnauthorized: false } : false;
+const isLocalOrDockerDb =
+  process.env.DATABASE_URL?.includes('@primary:') ||
+  process.env.DATABASE_URL?.includes('@replica:') ||
+  process.env.DATABASE_URL?.includes('@localhost:') ||
+  process.env.DATABASE_URL?.includes('@127.0.0.1:');
+
+const sslConfig =
+  process.env.DB_SSL === 'true' ||
+  (isProduction && process.env.DB_SSL !== 'false' && !isLocalOrDockerDb)
+    ? { rejectUnauthorized: false }
+    : false;
 
 export const getReplicaConfig = () => {
   const primaryConnectionString = process.env.DATABASE_URL || '';

@@ -58,17 +58,23 @@ test('dispatchDiscord sends rich embed payload with proper color code', async ()
     return new Response(null, { status: 204 });
   };
 
-  const res = await dispatchDiscord('https://discord.com/api/webhooks/mock/123', {
-    eventType: 'down',
-    monitor: { name: 'Main Database', type: 'postgres' },
-    error: 'connection pool exhausted',
-  });
+  const res = await dispatchDiscord(
+    'https://discord.com/api/webhooks/mock/123',
+    {
+      eventType: 'down',
+      monitor: { name: 'Main Database', type: 'postgres' },
+      error: 'connection pool exhausted',
+    },
+  );
 
   assert.equal(res.success, true);
   assert.equal(capturedBody.username, 'PulseGrid Monitoring');
   assert.equal(capturedBody.embeds.length, 1);
   assert.equal(capturedBody.embeds[0].color, 0xef4444); // Red
-  assert.equal(capturedBody.embeds[0].title, '🚨 PulseGrid Incident Alert: Service DOWN');
+  assert.equal(
+    capturedBody.embeds[0].title,
+    '🚨 PulseGrid Incident Alert: Service DOWN',
+  );
 });
 
 test('dispatchDiscord sends green recovery embed', async () => {
@@ -78,11 +84,14 @@ test('dispatchDiscord sends green recovery embed', async () => {
     return new Response(null, { status: 204 });
   };
 
-  const res = await dispatchDiscord('https://discord.com/api/webhooks/mock/123', {
-    eventType: 'recovery',
-    monitor: { name: 'Main Database', type: 'postgres' },
-    latency: 15,
-  });
+  const res = await dispatchDiscord(
+    'https://discord.com/api/webhooks/mock/123',
+    {
+      eventType: 'recovery',
+      monitor: { name: 'Main Database', type: 'postgres' },
+      latency: 15,
+    },
+  );
 
   assert.equal(res.success, true);
   assert.equal(capturedBody.embeds[0].color, 0x10b981); // Green
@@ -167,10 +176,7 @@ test('down and recovery events fan out only to all configured channels', async (
     assert.ok(results.every((result) => result.status === 'fulfilled'));
   }
 
-  assert.deepEqual(deliveredChatIds, [
-    '-1001234567890',
-    '-1001234567890',
-  ]);
+  assert.deepEqual(deliveredChatIds, ['-1001234567890', '-1001234567890']);
 });
 
 test('events without configured channels do not use the global Telegram chat', async () => {
