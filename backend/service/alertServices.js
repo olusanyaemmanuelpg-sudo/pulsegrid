@@ -31,17 +31,14 @@ export const sendTelegramAlert = async ({
   eventType,
   error = null,
   latency = 0,
+  chatId: destinationChatId = chatId,
 }) => {
-  if (!monitor || !['down', 'recovery'].includes(eventType)) {
-    console.error(
-      '❌ [Telegram] Alert requires a monitor and valid event type.',
-    );
-    return;
+  if (!monitor || !['down', 'recovery', 'test'].includes(eventType)) {
+    throw new Error('Telegram alert requires a monitor and valid event type.');
   }
 
-  if (!botToken || !chatId) {
-    console.warn('⚠️ [Telegram] Bot token or Chat ID missing. Alert skipped.');
-    return;
+  if (!botToken || !destinationChatId) {
+    throw new Error('Telegram bot token or Chat ID is missing.');
   }
 
   const timestamp = new Date().toUTCString();
@@ -71,71 +68,36 @@ export const sendTelegramAlert = async ({
 
 <i>Incident resolved. Service is healthy and responding.</i>
 `.trim();
+  } else if (eventType === 'test') {
+    message = `
+🔔 <b>[PULSEGRID TEST NOTIFICATION]</b> 🔔
+
+<b>Service:</b> ${escapeHtml(monitor.name)}
+<b>Type:</b> <code>${escapeHtml(monitor.type.toUpperCase())}</code>
+<b>Status:</b> ℹ️ <b>TEST</b>
+<b>Time:</b> ${timestamp}
+
+<i>PulseGrid test notification delivered to this Telegram channel.</i>
+`.trim();
   }
 
   const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    let response;
     try {
-      const response = await fetch(url, {
+      response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chat_id: chatId,
+          chat_id: destinationChatId,
           text: message,
           parse_mode: 'HTML',
         }),
         signal: AbortSignal.timeout(5000),
       });
-
-      const data = await response.json().catch(() => ({}));
-      if (response.ok && data.ok) {
-        console.log(
-          `📱 [Telegram] ${eventType.toUpperCase()} alert sent for "${monitor.name}"!`,
-        );
-        return;
-      }
-
-      const errorCode = Number(data.error_code || response.status);
-      const description = data.description || `HTTP ${response.status}`;
-      const retryable =
-        response.status === 429 ||
-        response.status >= 500 ||
-        errorCode === 429 ||
-        errorCode >= 500;
-
-      if (!retryable || attempt === MAX_ATTEMPTS) {
-        console.error(
-          `❌ [Telegram] API error after ${attempt} attempt(s):`,
-          description,
-        );
-        return;
-      }
-
-      const retryAfterSeconds = Number(data.parameters?.retry_after);
-      const delayMs =
-        errorCode === 429 && retryAfterSeconds > 0
-          ? retryAfterSeconds * 1000
-          : RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
-
-      if (delayMs > MAX_RETRY_DELAY_MS) {
-        console.error(
-          '❌ [Telegram] Retry-After exceeds the maximum retry delay:',
-          description,
-        );
-        return;
-      }
-
-      console.warn(
-        `⚠️ [Telegram] Temporary API error; retrying (${attempt + 1}/${MAX_ATTEMPTS}) in ${delayMs}ms.`,
-      );
-      await wait(delayMs);
     } catch (err) {
       if (attempt === MAX_ATTEMPTS) {
-        console.error(
-          `❌ [Telegram] Dispatch failed after ${attempt} attempts:`,
-          err.cause?.code || err.message,
-        );
-        return;
+        throw err;
       }
 
       const delayMs = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
@@ -144,6 +106,42 @@ export const sendTelegramAlert = async ({
         err.cause?.code || err.message,
       );
       await wait(delayMs);
+      continue;
     }
+
+    const data = await response.json().catch(() => ({}));
+    if (response.ok && data.ok) {
+      console.log(
+        `📱 [Telegram] ${eventType.toUpperCase()} alert sent for "${monitor.name}"!`,
+      );
+      return { success: true, channel: 'telegram' };
+    }
+
+    const errorCode = Number(data.error_code || response.status);
+    const description = data.description || `HTTP ${response.status}`;
+    const retryable =
+      response.status === 429 ||
+      response.status >= 500 ||
+      errorCode === 429 ||
+      errorCode >= 500;
+
+    if (!retryable || attempt === MAX_ATTEMPTS) {
+      throw new Error(`Telegram API error: ${description}`);
+    }
+
+    const retryAfterSeconds = Number(data.parameters?.retry_after);
+    const delayMs =
+      errorCode === 429 && retryAfterSeconds > 0
+        ? retryAfterSeconds * 1000
+        : RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+
+    if (delayMs > MAX_RETRY_DELAY_MS) {
+      throw new Error(`Telegram retry delay exceeds limit: ${description}`);
+    }
+
+    console.warn(
+      `⚠️ [Telegram] Temporary API error; retrying (${attempt + 1}/${MAX_ATTEMPTS}) in ${delayMs}ms.`,
+    );
+    await wait(delayMs);
   }
 };

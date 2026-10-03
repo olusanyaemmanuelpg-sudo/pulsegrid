@@ -43,7 +43,10 @@ test('Telegram alert does not retry permanent API errors', async () => {
     );
   };
 
-  await sendTelegramAlert({ monitor, eventType: 'recovery' });
+  await assert.rejects(
+    sendTelegramAlert({ monitor, eventType: 'recovery' }),
+    /Telegram API error: Unauthorized/,
+  );
 
   assert.equal(attempts, 1);
 });
@@ -68,4 +71,22 @@ test('Telegram alert payload does not include connection targets', async () => {
     sentMessage,
     /postgresql|probe|private-password|db\.example/,
   );
+});
+
+test('Telegram test alert targets the configured channel', async () => {
+  let sentPayload = null;
+  globalThis.fetch = async (_url, options) => {
+    sentPayload = JSON.parse(options.body);
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  };
+
+  const result = await sendTelegramAlert({
+    monitor,
+    eventType: 'test',
+    chatId: '-1001234567890',
+  });
+
+  assert.deepEqual(result, { success: true, channel: 'telegram' });
+  assert.equal(sentPayload.chat_id, '-1001234567890');
+  assert.match(sentPayload.text, /TEST NOTIFICATION/);
 });

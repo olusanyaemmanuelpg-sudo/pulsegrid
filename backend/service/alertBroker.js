@@ -11,7 +11,13 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const escapeHtml = (value) =>
   String(value ?? '').replace(/[&<>"']/g, (c) => {
-    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    const map = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    };
     return map[c];
   });
 
@@ -28,7 +34,8 @@ export const dispatchDiscord = async (webhookUrl, event) => {
 
   let color = 0x3b82f6; // Blue (test)
   let title = '🔔 PulseGrid Test Notification';
-  let description = 'This is a test notification from your PulseGrid monitoring cluster.';
+  let description =
+    'This is a test notification from your PulseGrid monitoring cluster.';
 
   if (eventType === 'down') {
     color = 0xef4444; // Red
@@ -47,10 +54,19 @@ export const dispatchDiscord = async (webhookUrl, event) => {
     timestamp: time,
     fields: [
       { name: 'Service', value: monitor?.name || 'N/A', inline: true },
-      { name: 'Type', value: (monitor?.type || 'HTTP').toUpperCase(), inline: true },
+      {
+        name: 'Type',
+        value: (monitor?.type || 'HTTP').toUpperCase(),
+        inline: true,
+      },
       {
         name: 'Status',
-        value: eventType === 'down' ? '🔴 DOWN' : eventType === 'recovery' ? '🟢 OPERATIONAL' : 'ℹ️ TEST',
+        value:
+          eventType === 'down'
+            ? '🔴 DOWN'
+            : eventType === 'recovery'
+              ? '🟢 OPERATIONAL'
+              : 'ℹ️ TEST',
         inline: true,
       },
     ],
@@ -58,10 +74,17 @@ export const dispatchDiscord = async (webhookUrl, event) => {
   };
 
   if (eventType === 'down' && error) {
-    embed.fields.push({ name: 'Error / Reason', value: `\`\`\`${String(error).slice(0, 500)}\`\`\`` });
+    embed.fields.push({
+      name: 'Error / Reason',
+      value: `\`\`\`${String(error).slice(0, 500)}\`\`\``,
+    });
   }
   if (eventType === 'recovery' && latency !== undefined) {
-    embed.fields.push({ name: 'Response Latency', value: `${latency}ms`, inline: true });
+    embed.fields.push({
+      name: 'Response Latency',
+      value: `${latency}ms`,
+      inline: true,
+    });
   }
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
@@ -78,7 +101,9 @@ export const dispatchDiscord = async (webhookUrl, event) => {
       });
 
       if (res.ok || res.status === 204) {
-        console.log(`🎮 [Discord] ${eventType.toUpperCase()} alert delivered for "${monitor?.name || 'Test'}"`);
+        console.log(
+          `🎮 [Discord] ${eventType.toUpperCase()} alert delivered for "${monitor?.name || 'Test'}"`,
+        );
         return { success: true, channel: 'discord' };
       }
 
@@ -91,7 +116,10 @@ export const dispatchDiscord = async (webhookUrl, event) => {
       await wait(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
     } catch (err) {
       if (attempt === MAX_ATTEMPTS) {
-        console.error(`❌ [Discord] Failed after ${attempt} attempts:`, err.message);
+        console.error(
+          `❌ [Discord] Failed after ${attempt} attempts:`,
+          err.message,
+        );
         throw err;
       }
       await wait(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
@@ -102,19 +130,25 @@ export const dispatchDiscord = async (webhookUrl, event) => {
 /**
  * Dispatches an event to a generic Webhook (Slack, PagerDuty, or custom backend).
  */
-export const dispatchWebhook = async (webhookUrl, event, secretHeader = null) => {
+export const dispatchWebhook = async (
+  webhookUrl,
+  event,
+  secretHeader = null,
+) => {
   if (!webhookUrl || typeof webhookUrl !== 'string') {
     throw new Error('Webhook URL is required.');
   }
 
   const payload = {
     event: `monitor.${event.eventType}`,
-    monitor: event.monitor ? {
-      id: event.monitor.id,
-      name: event.monitor.name,
-      type: event.monitor.type,
-      status: event.eventType === 'down' ? 'down' : 'up',
-    } : null,
+    monitor: event.monitor
+      ? {
+          id: event.monitor.id,
+          name: event.monitor.name,
+          type: event.monitor.type,
+          status: event.eventType === 'down' ? 'down' : 'up',
+        }
+      : null,
     latency_ms: event.latency ?? 0,
     error: event.error ?? null,
     timestamp: event.timestamp || new Date().toISOString(),
@@ -135,17 +169,25 @@ export const dispatchWebhook = async (webhookUrl, event, secretHeader = null) =>
       });
 
       if (res.ok) {
-        console.log(`🌐 [Webhook] ${event.eventType.toUpperCase()} alert delivered to ${webhookUrl}`);
+        console.log(
+          `🌐 [Webhook] ${event.eventType.toUpperCase()} alert delivered to ${webhookUrl}`,
+        );
         return { success: true, channel: 'webhook' };
       }
 
-      if ((res.status !== 429 && res.status < 500) || attempt === MAX_ATTEMPTS) {
+      if (
+        (res.status !== 429 && res.status < 500) ||
+        attempt === MAX_ATTEMPTS
+      ) {
         throw new Error(`Webhook endpoint returned HTTP ${res.status}`);
       }
       await wait(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
     } catch (err) {
       if (attempt === MAX_ATTEMPTS) {
-        console.error(`❌ [Webhook] Failed after ${attempt} attempts:`, err.message);
+        console.error(
+          `❌ [Webhook] Failed after ${attempt} attempts:`,
+          err.message,
+        );
         throw err;
       }
       await wait(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
@@ -162,7 +204,9 @@ export const dispatchEmail = async (email, event) => {
   }
 
   // Simulated email delivery / notification logger
-  console.log(`📧 [Email Notification] Alert sent to ${email} for event "${event.eventType}" on "${event.monitor?.name || 'Test'}"`);
+  console.log(
+    `📧 [Email Notification] Alert sent to ${email} for event "${event.eventType}" on "${event.monitor?.name || 'Test'}"`,
+  );
   return { success: true, channel: 'email', recipient: email };
 };
 
@@ -184,6 +228,7 @@ export const dispatchToChannel = async (channel, event) => {
         eventType: event.eventType,
         error: event.error,
         latency: event.latency,
+        chatId: cfg.chat_id,
       });
     case 'email':
       return await dispatchEmail(cfg.email, event);
@@ -213,7 +258,10 @@ export const publishAlertEvent = async (event) => {
       `📢 [Alert Broker] Enqueued "${event.eventType.toUpperCase()}" event for "${event.monitor?.name || 'Service'}" on message queue.`,
     );
   } catch (err) {
-    console.error('❌ [Alert Broker] Failed to enqueue alert event:', err.message);
+    console.error(
+      '❌ [Alert Broker] Failed to enqueue alert event:',
+      err.message,
+    );
   }
 };
 
@@ -234,7 +282,10 @@ export const processAlertEvent = async (event) => {
       );
       channels = rows;
     } catch (err) {
-      console.error('❌ [Alert Broker] Failed to load user channels:', err.message);
+      console.error(
+        '❌ [Alert Broker] Failed to load user channels:',
+        err.message,
+      );
     }
   }
 
@@ -245,33 +296,31 @@ export const processAlertEvent = async (event) => {
     for (const channel of channels) {
       dispatchPromises.push(
         dispatchToChannel(channel, event).catch((err) => {
-          console.error(`❌ [Alert Broker] Fan-out failure on channel "${channel.name}" (${channel.type}):`, err.message);
+          console.error(
+            `❌ [Alert Broker] Fan-out failure on channel "${channel.name}" (${channel.type}):`,
+            err.message,
+          );
           return { success: false, channel: channel.type, error: err.message };
         }),
       );
     }
   }
 
-  // 2. Global fallback (Telegram) if no channels are configured or if global bot is set
-  if (channels.length === 0 || process.env.DISPATCH_GLOBAL_ALERTS === 'true') {
-    if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
-      dispatchPromises.push(
-        sendTelegramAlert({
-          monitor: event.monitor,
-          eventType: event.eventType,
-          error: event.error,
-          latency: event.latency,
-        }).catch((err) => ({ success: false, channel: 'telegram', error: err.message })),
-      );
-    }
-  }
-
   const results = await Promise.allSettled(dispatchPromises);
-  const allFailed = results.length > 0 && results.every((r) => r.status === 'rejected' || r.value?.success === false);
+  const allFailed =
+    results.length > 0 &&
+    results.every((r) => r.status === 'rejected' || r.value?.success === false);
 
   if (allFailed) {
-    console.warn('⚠️ [Alert Broker] All channel dispatches failed. Routing event to Dead-Letter Queue (DLQ)...');
-    await redis.rpush(DLQ_KEY, JSON.stringify({ event, failedAt: new Date().toISOString() })).catch(() => {});
+    console.warn(
+      '⚠️ [Alert Broker] All channel dispatches failed. Routing event to Dead-Letter Queue (DLQ)...',
+    );
+    await redis
+      .rpush(
+        DLQ_KEY,
+        JSON.stringify({ event, failedAt: new Date().toISOString() }),
+      )
+      .catch(() => {});
   }
 
   return results;
@@ -287,7 +336,9 @@ export const startAlertWorker = (pollIntervalMs = 1000) => {
   if (isWorkerRunning) return;
   isWorkerRunning = true;
 
-  console.log(`📨 [Alert Broker] Message consumer worker started (Polling queue every ${pollIntervalMs}ms)...`);
+  console.log(
+    `📨 [Alert Broker] Message consumer worker started (Polling queue every ${pollIntervalMs}ms)...`,
+  );
 
   workerIntervalId = setInterval(async () => {
     try {
@@ -306,7 +357,10 @@ export const startAlertWorker = (pollIntervalMs = 1000) => {
           const event = JSON.parse(raw);
           await processAlertEvent(event);
         } catch (parseErr) {
-          console.error('❌ [Alert Broker] Malformed event in queue:', parseErr.message);
+          console.error(
+            '❌ [Alert Broker] Malformed event in queue:',
+            parseErr.message,
+          );
         }
       }
     } catch (err) {
