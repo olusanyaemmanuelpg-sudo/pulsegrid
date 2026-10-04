@@ -32,7 +32,7 @@ export const handleRegister = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const role = isAdminEmail(normalizedEmail) ? 'admin' : 'developer';
     const { rows: insertedRows } = await query(
-      `INSERT INTO users (name, email, password_hash)
+      `INSERT INTO users (name, email, password_hash, role)
        VALUES ($1, $2, $3, $4)
        RETURNING id, name, email, role, created_at`,
       [name, normalizedEmail, hashedPassword, role],

@@ -1,10 +1,17 @@
-const DEFAULT_ADMIN_EMAILS = 'olusanyaemmanuelpg@gmail.com';
+const DEFAULT_ADMIN_EMAILS =
+  process.env.NODE_ENV === 'production' ? '' : 'olusanyaemmanuelpg@gmail.com';
 
-export const getAdminEmails = (configuredEmails = process.env.ADMIN_EMAILS) =>
-  (configuredEmails || DEFAULT_ADMIN_EMAILS)
+export const getAdminEmails = (
+  configuredEmails = process.env.ADMIN_EMAILS ?? DEFAULT_ADMIN_EMAILS,
+) =>
+  (configuredEmails || '')
     .split(',')
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean);
 
-export const isAdminEmail = (email, configuredEmails) =>
-  getAdminEmails(configuredEmails).includes(email.trim().toLowerCase());
+export const isAdminEmail = (email, configuredEmails) => {
+  const normalizedEmail = String(email ?? '').trim().toLowerCase();
+  if (!normalizedEmail) return false;
+
+  return getAdminEmails(configuredEmails).includes(normalizedEmail);
+};

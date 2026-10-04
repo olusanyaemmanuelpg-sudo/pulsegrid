@@ -11,7 +11,19 @@ test('admin email allowlist is normalized', () => {
   assert.equal(isAdminEmail('user@example.com', 'admin@example.com'), false);
 });
 
-test('admin email allowlist defaults to the configured account', () => {
+test('admin email allowlist defaults to the configured account in local dev', () => {
   assert.deepEqual(getAdminEmails(''), ['olusanyaemmanuelpg@gmail.com']);
   assert.equal(isAdminEmail('OlusanyaEmmanuelPG@gmail.com'), true);
+});
+
+test('production mode does not silently grant a hardcoded admin fallback', () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+
+  try {
+    assert.deepEqual(getAdminEmails(), []);
+    assert.equal(isAdminEmail('olusanyaemmanuelpg@gmail.com'), false);
+  } finally {
+    process.env.NODE_ENV = previousNodeEnv;
+  }
 });

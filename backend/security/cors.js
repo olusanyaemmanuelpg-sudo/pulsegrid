@@ -1,5 +1,10 @@
 export const getAllowedOrigins = () => {
-  const rawOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:3000')
+  const fallbackOrigins =
+    process.env.NODE_ENV === 'production'
+      ? ''
+      : 'http://localhost:5173,http://localhost:3000';
+
+  const rawOrigins = (process.env.CORS_ORIGIN || fallbackOrigins)
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
