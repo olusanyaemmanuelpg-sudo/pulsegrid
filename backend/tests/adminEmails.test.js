@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import requireAuth from '../middleware/requireAuth.js';
+import { validateRuntimeConfig } from '../config/db.js';
 import { getAdminEmails, isAdminEmail } from '../security/adminEmails.js';
 
 test('admin email allowlist is normalized', () => {
@@ -63,6 +64,34 @@ test('missing JWT secret is rejected before auth can proceed', () => {
   } finally {
     if (previousJwtSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previousJwtSecret;
+    process.env.NODE_ENV = previousNodeEnv;
+  }
+});
+
+test('production startup validation fails when required runtime env is missing', () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousDatabaseUrl = process.env.DATABASE_URL;
+  const previousRedisUrl = process.env.REDIS_URL;
+  const previousMonitorKey = process.env.MONITOR_TARGET_ENCRYPTION_KEY;
+
+  process.env.NODE_ENV = 'production';
+  delete process.env.DATABASE_URL;
+  delete process.env.REDIS_URL;
+  delete process.env.MONITOR_TARGET_ENCRYPTION_KEY;
+
+  try {
+    assert.throws(
+      () => validateRuntimeConfig(),
+      /missing required environment variables/i,
+    );
+  } finally {
+    if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = previousDatabaseUrl;
+    if (previousRedisUrl === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = previousRedisUrl;
+    if (previousMonitorKey === undefined)
+      delete process.env.MONITOR_TARGET_ENCRYPTION_KEY;
+    else process.env.MONITOR_TARGET_ENCRYPTION_KEY = previousMonitorKey;
     process.env.NODE_ENV = previousNodeEnv;
   }
 });

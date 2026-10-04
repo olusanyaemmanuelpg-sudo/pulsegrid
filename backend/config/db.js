@@ -5,6 +5,45 @@ dotenv.config();
 
 const { Pool } = pg;
 
+export const validateRuntimeConfig = () => {
+  const requiredInProduction = [
+    'DATABASE_URL',
+    'REDIS_URL',
+    'JWT_SECRET',
+    'MONITOR_TARGET_ENCRYPTION_KEY',
+  ];
+  const missing = requiredInProduction.filter(
+    (key) => !process.env[key] || String(process.env[key]).trim() === '',
+  );
+
+  const invalidJwtSecret =
+    process.env.JWT_SECRET && String(process.env.JWT_SECRET).trim().length < 32;
+
+  const invalidMonitorTargetKey =
+    process.env.MONITOR_TARGET_ENCRYPTION_KEY &&
+    !/^[a-f0-9]{64}$/i.test(process.env.MONITOR_TARGET_ENCRYPTION_KEY);
+
+  if (process.env.NODE_ENV === 'production') {
+    if (missing.length > 0) {
+      throw new Error(
+        `Production startup failed: missing required environment variables: ${missing.join(', ')}`,
+      );
+    }
+
+    if (invalidJwtSecret) {
+      throw new Error(
+        'Production startup failed: JWT_SECRET must be at least 32 characters long.',
+      );
+    }
+
+    if (invalidMonitorTargetKey) {
+      throw new Error(
+        'Production startup failed: MONITOR_TARGET_ENCRYPTION_KEY must be a 64-character hex key.',
+      );
+    }
+  }
+};
+
 const isProduction = process.env.NODE_ENV === 'production';
 const isLocalOrDockerDb =
   process.env.DATABASE_URL?.includes('@primary:') ||

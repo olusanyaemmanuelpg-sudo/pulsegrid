@@ -1,7 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { query, isUsingDedicatedReplica, closePools } from './config/db.js';
+import {
+  query,
+  isUsingDedicatedReplica,
+  closePools,
+  validateRuntimeConfig,
+} from './config/db.js';
 import { redis } from './config/redis.js';
 import { initDb } from './model/initDb.js';
 import registerRouter from './routes/register.js';
@@ -20,30 +25,6 @@ import { startAlertWorker } from './service/alertBroker.js';
 import { corsOptions } from './security/cors.js';
 
 dotenv.config();
-
-const validateRuntimeConfig = () => {
-  const requiredInProduction = ['DATABASE_URL', 'JWT_SECRET', 'REDIS_URL'];
-  const missing = requiredInProduction.filter(
-    (key) => !process.env[key] || String(process.env[key]).trim() === '',
-  );
-
-  const invalidJwtSecret =
-    process.env.JWT_SECRET && String(process.env.JWT_SECRET).trim().length < 32;
-
-  if (process.env.NODE_ENV === 'production') {
-    if (missing.length > 0) {
-      throw new Error(
-        `Production startup failed: missing required environment variables: ${missing.join(', ')}`,
-      );
-    }
-
-    if (invalidJwtSecret) {
-      throw new Error(
-        'Production startup failed: JWT_SECRET must be at least 32 characters long.',
-      );
-    }
-  }
-};
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
