@@ -162,11 +162,24 @@ export const initDb = async () => {
         target_fingerprint,
         check_interval,
         COALESCE(NULLIF(btrim(keyword), ''), '')
-      );
-    `);
     await client.query('DROP INDEX IF EXISTS monitors_unique_user_configuration_idx;');
+
+    // Promote administrator emails configured in ADMIN_EMAILS (or default admin accounts)
+    const adminEmails = (
+      process.env.ADMIN_EMAILS || 'webdeji@gmail.com,olusanyaemmanuelpg@gmail.com'
+    )
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (adminEmails.length > 0) {
+      await client.query(
+        `UPDATE users SET role = 'admin' WHERE lower(btrim(email)) = ANY($1::text[]);`, [adminEmails],
+      );
+    }
+
     console.log(
-      '✅ PostgreSQL: tables and monitor uniqueness verified successfully.',
+      '✅ PostgreSQL: tables, indexes, and administrator roles verified successfully.',
     );
   } catch (err) {
     console.error('❌ Failed to initialize database table:', err.message);

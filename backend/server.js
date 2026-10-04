@@ -10,6 +10,7 @@ import requireAuth from './middleware/requireAuth.js';
 import monitorRoutes from './routes/monitors.js';
 import heartbeatRoutes from './routes/heartbeatRoute.js';
 import alertRoutes from './routes/alerts.js';
+import adminRoutes from './routes/admin.js';
 import { startScheduler } from './service/scheduler.js';
 import { getPublicStatus } from './controller/monitorController.js';
 import { createRateLimiter } from './middleware/rateLimiter.js';
@@ -63,6 +64,7 @@ app.use('/api/heartbeat', heartbeatRoutes);
 app.use(requireAuth);
 app.use('/api/monitors', monitorRoutes);
 app.use('/api/alerts', alertRoutes);
+app.use('/api/admin', adminRoutes);
 
 let serverInstance = null;
 let isShuttingDown = false;
