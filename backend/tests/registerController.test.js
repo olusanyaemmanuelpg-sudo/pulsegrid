@@ -16,9 +16,22 @@ test('handleRegister stores the user with matching column/value counts', async (
         sql,
         /INSERT INTO users \(name, email, password_hash, role\)/,
       );
-      assert.deepEqual(params, ['Jane', 'jane@example.com', 'hashed-password', 'developer']);
+      assert.deepEqual(params, [
+        'Jane',
+        'jane@example.com',
+        'hashed-password',
+        'developer',
+      ]);
       return {
-        rows: [{ id: 1, name: 'Jane', email: 'jane@example.com', role: 'developer', created_at: new Date() }],
+        rows: [
+          {
+            id: 1,
+            name: 'Jane',
+            email: 'jane@example.com',
+            role: 'developer',
+            created_at: new Date(),
+          },
+        ],
       };
     }
 

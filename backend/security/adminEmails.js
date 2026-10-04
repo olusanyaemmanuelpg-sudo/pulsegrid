@@ -10,7 +10,9 @@ export const getAdminEmails = (
     .filter(Boolean);
 
 export const isAdminEmail = (email, configuredEmails) => {
-  const normalizedEmail = String(email ?? '').trim().toLowerCase();
+  const normalizedEmail = String(email ?? '')
+    .trim()
+    .toLowerCase();
   if (!normalizedEmail) return false;
 
   return getAdminEmails(configuredEmails).includes(normalizedEmail);

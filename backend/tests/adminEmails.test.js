@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import requireAuth from '../middleware/requireAuth.js';
 import { getAdminEmails, isAdminEmail } from '../security/adminEmails.js';
 
 test('admin email allowlist is normalized', () => {
@@ -24,6 +25,44 @@ test('production mode does not silently grant a hardcoded admin fallback', () =>
     assert.deepEqual(getAdminEmails(), []);
     assert.equal(isAdminEmail('olusanyaemmanuelpg@gmail.com'), false);
   } finally {
+    process.env.NODE_ENV = previousNodeEnv;
+  }
+});
+
+test('missing JWT secret is rejected before auth can proceed', () => {
+  const previousJwtSecret = process.env.JWT_SECRET;
+  const previousNodeEnv = process.env.NODE_ENV;
+  delete process.env.JWT_SECRET;
+  process.env.NODE_ENV = 'production';
+
+  const req = {
+    headers: { authorization: 'Bearer abcdefghijklmnopqrstuvwxyz123456' },
+  };
+  const res = {
+    statusCode: null,
+    payload: null,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(data) {
+      this.payload = data;
+      return this;
+    },
+  };
+
+  const next = () => {
+    throw new Error('next should not run');
+  };
+
+  try {
+    const result = requireAuth(req, res, next);
+    assert.equal(result, undefined);
+    assert.equal(res.statusCode, 500);
+    assert.match(res.payload.message, /authentication is not configured/i);
+  } finally {
+    if (previousJwtSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = previousJwtSecret;
     process.env.NODE_ENV = previousNodeEnv;
   }
 });

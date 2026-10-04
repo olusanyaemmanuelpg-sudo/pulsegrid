@@ -18,7 +18,32 @@ import { startTelemetryFlusher } from './service/telemetryFlusher.js';
 import { startWorkerHeartbeat } from './service/workerRegistry.js';
 import { startAlertWorker } from './service/alertBroker.js';
 import { corsOptions } from './security/cors.js';
+
 dotenv.config();
+
+const validateRuntimeConfig = () => {
+  const requiredInProduction = ['DATABASE_URL', 'JWT_SECRET', 'REDIS_URL'];
+  const missing = requiredInProduction.filter(
+    (key) => !process.env[key] || String(process.env[key]).trim() === '',
+  );
+
+  const invalidJwtSecret =
+    process.env.JWT_SECRET && String(process.env.JWT_SECRET).trim().length < 32;
+
+  if (process.env.NODE_ENV === 'production') {
+    if (missing.length > 0) {
+      throw new Error(
+        `Production startup failed: missing required environment variables: ${missing.join(', ')}`,
+      );
+    }
+
+    if (invalidJwtSecret) {
+      throw new Error(
+        'Production startup failed: JWT_SECRET must be at least 32 characters long.',
+      );
+    }
+  }
+};
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -72,24 +97,33 @@ let isShuttingDown = false;
 const handleServerShutdown = async (signal) => {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  console.log(`🛑 [PulseGrid API ${INSTANCE_ID}] Received ${signal}, initiating graceful shutdown...`);
+  console.log(
+    `🛑 [PulseGrid API ${INSTANCE_ID}] Received ${signal}, initiating graceful shutdown...`,
+  );
 
   const forceTimeout = setTimeout(() => {
-    console.error(`⚠️ [${INSTANCE_ID}] Graceful shutdown timed out (10s). Forcing process exit.`);
+    console.error(
+      `⚠️ [${INSTANCE_ID}] Graceful shutdown timed out (10s). Forcing process exit.`,
+    );
     process.exit(1);
   }, 10000);
   forceTimeout.unref();
 
   if (serverInstance) {
     serverInstance.close(async () => {
-      console.log(`🔒 [${INSTANCE_ID}] Stopped accepting new HTTP connections.`);
+      console.log(
+        `🔒 [${INSTANCE_ID}] Stopped accepting new HTTP connections.`,
+      );
       try {
         await closePools();
         await redis.quit();
         console.log(`✅ [${INSTANCE_ID}] API node shut down cleanly.`);
         process.exit(0);
       } catch (err) {
-        console.error(`❌ [${INSTANCE_ID}] Error closing resources:`, err.message);
+        console.error(
+          `❌ [${INSTANCE_ID}] Error closing resources:`,
+          err.message,
+        );
         process.exit(1);
       }
     });
@@ -104,6 +138,7 @@ process.on('SIGTERM', () => handleServerShutdown('SIGTERM'));
 process.on('SIGINT', () => handleServerShutdown('SIGINT'));
 
 const startServer = async () => {
+  validateRuntimeConfig();
   await initDb();
   const runWorkers = process.env.RUN_WORKERS !== 'false';
 
@@ -119,7 +154,9 @@ const startServer = async () => {
   }
 
   serverInstance = app.listen(port, () => {
-    console.log(`🚀 PulseGrid API [${INSTANCE_ID}] listening at http://localhost:${port}`);
+    console.log(
+      `🚀 PulseGrid API [${INSTANCE_ID}] listening at http://localhost:${port}`,
+    );
     console.log(
       `📊 Database topology: ${isUsingDedicatedReplica ? 'read replica enabled' : 'primary-only mode (reads use primary)'}`,
     );
