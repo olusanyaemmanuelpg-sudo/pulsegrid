@@ -9,6 +9,7 @@ import { AlertChannelsModal } from './components/AlertChannelsModal';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { AdminPage } from './pages/AdminPage';
 import { StatusPage } from './pages/StatusPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { useAuth } from './context/AuthContext';
@@ -28,6 +29,21 @@ const ProtectedDashboard = ({ onOpenAddModal, onOpenAlertsModal }) => {
       onOpenAlertsModal={onOpenAlertsModal}
     />
   );
+};
+
+const ProtectedAdmin = () => {
+  const { user } = useAuth();
+  const location = useLocation();
+
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  if (user.role !== 'admin') {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <AdminPage />;
 };
 
 function App() {
@@ -57,6 +73,7 @@ function App() {
                     />
                   }
                 />
+                <Route path="/admin" element={<ProtectedAdmin />} />
                 <Route path="/status" element={<StatusPage />} />
                 <Route path="*" element={<NotFoundPage />} />
               </Routes>

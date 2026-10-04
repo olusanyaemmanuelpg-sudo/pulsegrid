@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router';
-import { Activity, Plus, Sun, Moon, Bell } from './Icons';
+import { Activity, Plus, Sun, Moon, Bell, Shield } from './Icons';
 import { useMonitors } from '../context/MonitorContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -31,12 +31,24 @@ export const Navbar = ({ onOpenAddModal, onOpenAlertsModal }) => {
           {location.pathname === '/dashboard' && (
             <span className="brand-badge">Console</span>
           )}
+          {location.pathname === '/admin' && (
+            <span
+              className="brand-badge"
+              style={{
+                background: 'rgba(139, 92, 246, 0.15)',
+                color: '#a78bfa',
+                borderColor: 'rgba(139, 92, 246, 0.35)',
+              }}
+            >
+              Admin
+            </span>
+          )}
         </div>
 
         {/* Center Links */}
         {!isAuthPage && (
           <div className="nav-links">
-            {location.pathname === '/dashboard' ? (
+            {location.pathname === '/dashboard' || location.pathname === '/admin' ? (
               <>
                 <Link
                   to="/dashboard"
@@ -44,6 +56,16 @@ export const Navbar = ({ onOpenAddModal, onOpenAlertsModal }) => {
                 >
                   Monitors
                 </Link>
+                {user?.role === 'admin' && (
+                  <Link
+                    to="/admin"
+                    className={`nav-link ${location.pathname === '/admin' ? 'active' : ''}`}
+                    style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <Shield size={14} />
+                    <span>Admin</span>
+                  </Link>
+                )}
                 <Link
                   to="/status"
                   className="nav-link"
@@ -162,6 +184,17 @@ export const Navbar = ({ onOpenAddModal, onOpenAlertsModal }) => {
                     >
                       Console Overview
                     </Link>
+                    {user.role === 'admin' && (
+                      <Link
+                        to="/admin"
+                        className="dropdown-item"
+                        style={{ color: '#a78bfa', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
+                        onClick={() => setShowUserMenu(false)}
+                      >
+                        <Shield size={14} />
+                        <span>Admin Operations</span>
+                      </Link>
+                    )}
                     <button
                       className="dropdown-item"
                       onClick={() => {

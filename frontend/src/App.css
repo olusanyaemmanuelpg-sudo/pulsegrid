@@ -3178,3 +3178,27 @@
   gap: 1rem;
   flex-wrap: wrap;
 }
+
+/* ==========================================================================
+   Admin Operations Console
+   ========================================================================== */
+.spin-anim {
+  animation: spin 0.8s linear infinite;
+}
+
+.admin-container {
+  max-width: 1400px;
+}
+
+.admin-table-wrap table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.tab-btn:hover {
+  background: rgba(139, 92, 246, 0.08) !important;
+}
+
+.tab-btn.active {
+  background: rgba(139, 92, 246, 0.15) !important;
+}
+

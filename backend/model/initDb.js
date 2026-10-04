@@ -162,6 +162,8 @@ export const initDb = async () => {
         target_fingerprint,
         check_interval,
         COALESCE(NULLIF(btrim(keyword), ''), '')
+      );
+    `);
     await client.query('DROP INDEX IF EXISTS monitors_unique_user_configuration_idx;');
 
     // Promote administrator emails configured in ADMIN_EMAILS (or default admin accounts)
