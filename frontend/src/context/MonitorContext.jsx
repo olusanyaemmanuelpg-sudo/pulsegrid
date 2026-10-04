@@ -56,28 +56,88 @@ const normalizeMonitor = (m) => {
 export const MonitorProvider = ({ children }) => {
   const { token } = useAuth();
   const [monitors, setMonitors] = useState([]);
+  const [publicMonitors, setPublicMonitors] = useState([]);
+  const [systemStatus, setSystemStatus] = useState({
+    mode: 'auto',
+    announcement: {
+      active: false,
+      title: '',
+      message: '',
+      level: 'info',
+      updatedAt: null,
+    },
+    effectiveStatus: 'operational',
+  });
+  const [incidents, setIncidents] = useState({
+    active: [],
+    recent: [],
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch monitors from PostgreSQL via API (authenticated or public status)
+  // Fetch public system status, announcements, and active incidents
+  const fetchPublicStatus = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/status`);
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) {
+        if (data.systemStatus) {
+          setSystemStatus(data.systemStatus);
+        }
+        if (data.incidents) {
+          setIncidents({
+            active: data.incidents.active || [],
+            recent: data.incidents.recent || [],
+          });
+        }
+        if (Array.isArray(data.monitors)) {
+          const norm = data.monitors.map(normalizeMonitor);
+          setPublicMonitors(norm);
+          return norm;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch public status:', err.message);
+    }
+    return [];
+  }, []);
+
+  // Fetch monitors from PostgreSQL via API (authenticated personal or public)
   const fetchMonitors = useCallback(
     async (isSilent = false) => {
       if (!isSilent) setLoading(true);
 
       try {
-        const endpoint = token ? '/api/monitors' : '/api/status';
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        if (token) {
+          // Fetch authenticated user's monitors and public status in parallel
+          const [monitorsRes] = await Promise.all([
+            fetch(`${API_BASE_URL}/api/monitors`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }),
+            fetchPublicStatus(),
+          ]);
 
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-          headers,
-        });
+          const data = await monitorsRes.json().catch(() => ({}));
+          if (!monitorsRes.ok) {
+            throw new Error(data.message || 'Failed to fetch monitors.');
+          }
 
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data.message || 'Failed to fetch monitors.');
+          setMonitors((data.monitors || []).map(normalizeMonitor));
+        } else {
+          // Public visitor mode: fetch /api/status directly
+          const response = await fetch(`${API_BASE_URL}/api/status`);
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(data.message || 'Failed to fetch status.');
+          }
+
+          if (data.systemStatus) setSystemStatus(data.systemStatus);
+          if (data.incidents) setIncidents(data.incidents);
+          const norm = (data.monitors || []).map(normalizeMonitor);
+          setMonitors(norm);
+          setPublicMonitors(norm);
         }
 
-        setMonitors((data.monitors || []).map(normalizeMonitor));
         setError(null);
       } catch (err) {
         console.error('Fetch monitors error:', err.message);
@@ -86,7 +146,7 @@ export const MonitorProvider = ({ children }) => {
         if (!isSilent) setLoading(false);
       }
     },
-    [token],
+    [token, fetchPublicStatus],
   );
 
   // Initial load + 10s auto-refresh polling
@@ -199,9 +259,13 @@ export const MonitorProvider = ({ children }) => {
     <MonitorContext.Provider
       value={{
         monitors,
+        publicMonitors,
+        systemStatus,
+        incidents,
         loading,
         error,
         fetchMonitors,
+        fetchPublicStatus,
         addMonitor,
         deleteMonitor,
         testMonitor,

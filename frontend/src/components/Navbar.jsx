@@ -7,12 +7,31 @@ import { useAuth } from '../context/AuthContext';
 
 export const Navbar = ({ onOpenAddModal, onOpenAlertsModal }) => {
   const location = useLocation();
-  const { metrics } = useMonitors();
+  const { metrics, systemStatus } = useMonitors();
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
 
-  const isOperational = metrics.down === 0;
+  const isMaintenance = systemStatus?.effectiveStatus === 'maintenance';
+  const isDegradedOrOutage =
+    systemStatus?.effectiveStatus === 'major_outage' ||
+    systemStatus?.effectiveStatus === 'partial_outage' ||
+    systemStatus?.effectiveStatus === 'degraded' ||
+    metrics.down > 0;
+  const isOperational = !isMaintenance && !isDegradedOrOutage;
+
+  const statusPillClass = isMaintenance
+    ? 'maintenance'
+    : isOperational
+    ? 'up'
+    : 'down';
+
+  const statusPillText = isMaintenance
+    ? 'Maintenance in progress'
+    : isOperational
+    ? 'All systems operational'
+    : `${metrics.down > 0 ? metrics.down : 'System'} service issue`;
+
   const isAuthPage = location.pathname === '/login';
 
   return (
@@ -112,13 +131,9 @@ export const Navbar = ({ onOpenAddModal, onOpenAlertsModal }) => {
         <div className="nav-actions">
           {/* Status pill */}
           {!isAuthPage && location.pathname !== '/' && (
-            <div className={`status-pill ${isOperational ? 'up' : 'down'}`}>
+            <div className={`status-pill ${statusPillClass}`}>
               <span className="pulse-dot"></span>
-              <span>
-                {isOperational
-                  ? 'All systems operational'
-                  : `${metrics.down} service issue`}
-              </span>
+              <span>{statusPillText}</span>
             </div>
           )}
 

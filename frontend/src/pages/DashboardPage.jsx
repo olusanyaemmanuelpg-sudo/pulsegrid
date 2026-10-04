@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router';
 import { useMonitors } from '../context/MonitorContext';
 import { useAuth } from '../context/AuthContext';
 import { MonitorCard } from '../components/MonitorCard';
@@ -14,10 +15,11 @@ import {
   Download,
   RefreshCw,
   Bell,
+  Megaphone,
 } from '../components/Icons';
 
 export const DashboardPage = ({ onOpenAddModal, onOpenAlertsModal }) => {
-  const { monitors, metrics, testMonitor } = useMonitors();
+  const { monitors, metrics, testMonitor, systemStatus } = useMonitors();
   const { user } = useAuth();
   const [filterType, setFilterType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -121,6 +123,67 @@ export const DashboardPage = ({ onOpenAddModal, onOpenAlertsModal }) => {
           </button>
         </div>
       </div>
+
+      {/* Platform Announcement Banner (if active) */}
+      {systemStatus?.announcement?.active && (
+        <div
+          className={`platform-announcement-banner level-${systemStatus.announcement.level || 'info'}`}
+          style={{
+            marginBottom: '1.5rem',
+            padding: '0.85rem 1.25rem',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem',
+            background:
+              systemStatus.announcement.level === 'critical'
+                ? 'rgba(239, 68, 68, 0.12)'
+                : systemStatus.announcement.level === 'warning'
+                ? 'rgba(245, 158, 11, 0.12)'
+                : systemStatus.announcement.level === 'maintenance'
+                ? 'rgba(139, 92, 246, 0.12)'
+                : 'rgba(59, 130, 246, 0.12)',
+            border:
+              systemStatus.announcement.level === 'critical'
+                ? '1px solid rgba(239, 68, 68, 0.3)'
+                : systemStatus.announcement.level === 'warning'
+                ? '1px solid rgba(245, 158, 11, 0.3)'
+                : systemStatus.announcement.level === 'maintenance'
+                ? '1px solid rgba(139, 92, 246, 0.3)'
+                : '1px solid rgba(59, 130, 246, 0.3)',
+            color:
+              systemStatus.announcement.level === 'critical'
+                ? '#ef4444'
+                : systemStatus.announcement.level === 'warning'
+                ? '#f59e0b'
+                : systemStatus.announcement.level === 'maintenance'
+                ? '#a78bfa'
+                : '#60a5fa',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
+            <Megaphone size={18} />
+            <span style={{ fontSize: '0.875rem' }}>
+              <strong>{systemStatus.announcement.title}:</strong> {systemStatus.announcement.message}
+            </span>
+          </div>
+          <Link
+            to="/status"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              textDecoration: 'underline',
+              color: 'inherit',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Status Page ↗
+          </Link>
+        </div>
+      )}
 
       {/* Top Banner / Metrics Overview */}
       <div className="metrics-row">

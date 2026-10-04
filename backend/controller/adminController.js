@@ -203,6 +203,7 @@ export const getAdminMonitors = async (req, res) => {
         m.last_latency_ms,
         m.last_checked_at,
         m.created_at,
+        COALESCE(m.is_public, true) AS is_public,
         u.name AS user_name,
         u.email AS user_email
       FROM monitors m
@@ -237,6 +238,7 @@ export const getAdminMonitors = async (req, res) => {
         lastLatencyMs: m.last_latency_ms,
         lastCheckedAt: m.last_checked_at,
         createdAt: m.created_at,
+        isPublic: m.is_public !== false,
       };
     });
 
@@ -382,4 +384,263 @@ export const adminDeleteMonitor = async (req, res) => {
     return res.status(500).json({ message: 'Unable to delete monitor.' });
   }
 };
+
+/**
+ * Fetches current system status configuration, announcements, and all recorded incidents.
+ */
+export const getAdminSystemStatus = async (req, res) => {
+  try {
+    const { rows: statusRows } = await readQuery(
+      `SELECT id, mode, announcement_title, announcement_message, announcement_level, is_announcement_active, updated_at
+       FROM system_status
+       WHERE id = 1
+       LIMIT 1;`,
+    );
+
+    const { rows: incidentRows } = await readQuery(
+      `SELECT id, title, status, severity, impacted_components, message, created_at, updated_at, resolved_at
+       FROM system_incidents
+       ORDER BY created_at DESC;`,
+    );
+
+    const statusConfig = statusRows[0] || {
+      id: 1,
+      mode: 'auto',
+      announcement_title: '',
+      announcement_message: '',
+      announcement_level: 'info',
+      is_announcement_active: false,
+    };
+
+    return res.status(200).json({
+      statusConfig,
+      incidents: incidentRows,
+    });
+  } catch (err) {
+    console.error('❌ [Admin Status] Fetch failed:', err.message);
+    return res.status(500).json({ message: 'Failed to retrieve system status settings.' });
+  }
+};
+
+/**
+ * Updates global platform status override mode and announcement banner.
+ */
+export const updateAdminSystemStatus = async (req, res) => {
+  const { mode, announcementTitle, announcementMessage, announcementLevel, isAnnouncementActive } = req.body ?? {};
+
+  const allowedModes = ['auto', 'operational', 'degraded', 'partial_outage', 'major_outage', 'maintenance'];
+  if (mode && !allowedModes.includes(mode)) {
+    return res.status(400).json({ message: `Invalid status mode. Allowed: ${allowedModes.join(', ')}.` });
+  }
+
+  const allowedLevels = ['info', 'warning', 'critical', 'maintenance'];
+  if (announcementLevel && !allowedLevels.includes(announcementLevel)) {
+    return res.status(400).json({ message: `Invalid announcement level. Allowed: ${allowedLevels.join(', ')}.` });
+  }
+
+  try {
+    const { rows } = await query(
+      `INSERT INTO system_status (
+        id, mode, announcement_title, announcement_message, announcement_level, is_announcement_active, updated_by_user_id, updated_at
+      ) VALUES (
+        1, 
+        COALESCE($1, 'auto'), 
+        $2, 
+        $3, 
+        COALESCE($4, 'info'), 
+        COALESCE($5, false), 
+        $6, 
+        NOW()
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        mode = COALESCE(EXCLUDED.mode, system_status.mode),
+        announcement_title = EXCLUDED.announcement_title,
+        announcement_message = EXCLUDED.announcement_message,
+        announcement_level = COALESCE(EXCLUDED.announcement_level, system_status.announcement_level),
+        is_announcement_active = COALESCE(EXCLUDED.is_announcement_active, system_status.is_announcement_active),
+        updated_by_user_id = EXCLUDED.updated_by_user_id,
+        updated_at = NOW()
+      RETURNING *;`,
+      [
+        mode || 'auto',
+        announcementTitle ?? null,
+        announcementMessage ?? null,
+        announcementLevel || 'info',
+        Boolean(isAnnouncementActive),
+        req.user?.id || null,
+      ],
+    );
+
+    return res.status(200).json({
+      message: 'System status and announcement settings saved successfully.',
+      statusConfig: rows[0],
+    });
+  } catch (err) {
+    console.error('❌ [Admin Status] Update failed:', err.message);
+    return res.status(500).json({ message: 'Failed to update system status settings.' });
+  }
+};
+
+/**
+ * Creates a new public system incident.
+ */
+export const createAdminIncident = async (req, res) => {
+  const { title, severity, status, impactedComponents, message } = req.body ?? {};
+
+  if (!title || typeof title !== 'string' || !title.trim() || !message || typeof message !== 'string' || !message.trim()) {
+    return res.status(400).json({ message: 'Incident title and message are required.' });
+  }
+
+  const allowedStatus = ['investigating', 'identified', 'monitoring', 'resolved'];
+  const finalStatus = allowedStatus.includes(status) ? status : 'investigating';
+
+  const allowedSeverity = ['minor', 'major', 'critical', 'maintenance'];
+  const finalSeverity = allowedSeverity.includes(severity) ? severity : 'minor';
+
+  try {
+    const isResolved = finalStatus === 'resolved';
+    const { rows } = await query(
+      `INSERT INTO system_incidents (
+        title, severity, status, impacted_components, message, created_by, resolved_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *;`,
+      [
+        title.trim(),
+        finalSeverity,
+        finalStatus,
+        impactedComponents ? impactedComponents.trim() : null,
+        message.trim(),
+        req.user?.id || null,
+        isResolved ? new Date() : null,
+      ],
+    );
+
+    return res.status(201).json({
+      message: 'Incident published successfully.',
+      incident: rows[0],
+    });
+  } catch (err) {
+    console.error('❌ [Admin Incident] Create failed:', err.message);
+    return res.status(500).json({ message: 'Failed to create system incident.' });
+  }
+};
+
+/**
+ * Updates an ongoing or resolved system incident.
+ */
+export const updateAdminIncident = async (req, res) => {
+  const incidentId = Number(req.params.id);
+  if (!incidentId) {
+    return res.status(400).json({ message: 'Invalid incident ID.' });
+  }
+
+  const { title, severity, status, impactedComponents, message } = req.body ?? {};
+
+  const allowedStatus = ['investigating', 'identified', 'monitoring', 'resolved'];
+  if (status && !allowedStatus.includes(status)) {
+    return res.status(400).json({ message: `Invalid status. Allowed: ${allowedStatus.join(', ')}.` });
+  }
+
+  try {
+    const currentRes = await query('SELECT * FROM system_incidents WHERE id = $1', [incidentId]);
+    if (currentRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Incident not found.' });
+    }
+    const current = currentRes.rows[0];
+
+    const newStatus = status || current.status;
+    let resolvedAt = current.resolved_at;
+    if (newStatus === 'resolved' && !resolvedAt) {
+      resolvedAt = new Date();
+    } else if (newStatus !== 'resolved') {
+      resolvedAt = null;
+    }
+
+    const { rows } = await query(
+      `UPDATE system_incidents
+       SET title = COALESCE($1, title),
+           severity = COALESCE($2, severity),
+           status = COALESCE($3, status),
+           impacted_components = COALESCE($4, impacted_components),
+           message = COALESCE($5, message),
+           resolved_at = $6,
+           updated_at = NOW()
+       WHERE id = $7
+       RETURNING *;`,
+      [
+        title ? title.trim() : null,
+        severity || null,
+        newStatus,
+        impactedComponents !== undefined ? impactedComponents : null,
+        message ? message.trim() : null,
+        resolvedAt,
+        incidentId,
+      ],
+    );
+
+    return res.status(200).json({
+      message: 'Incident updated successfully.',
+      incident: rows[0],
+    });
+  } catch (err) {
+    console.error('❌ [Admin Incident] Update failed:', err.message);
+    return res.status(500).json({ message: 'Failed to update system incident.' });
+  }
+};
+
+/**
+ * Deletes a system incident.
+ */
+export const deleteAdminIncident = async (req, res) => {
+  const incidentId = Number(req.params.id);
+  if (!incidentId) {
+    return res.status(400).json({ message: 'Invalid incident ID.' });
+  }
+
+  try {
+    const { rowCount } = await query('DELETE FROM system_incidents WHERE id = $1', [incidentId]);
+    if (rowCount === 0) {
+      return res.status(404).json({ message: 'Incident not found.' });
+    }
+    return res.status(200).json({ message: 'Incident removed successfully.' });
+  } catch (err) {
+    console.error('❌ [Admin Incident] Delete failed:', err.message);
+    return res.status(500).json({ message: 'Failed to delete system incident.' });
+  }
+};
+
+/**
+ * Toggles whether a monitor is showcased on the public system status page.
+ */
+export const toggleMonitorVisibility = async (req, res) => {
+  const monitorId = Number(req.params.id);
+  const { isPublic } = req.body ?? {};
+
+  if (!monitorId || typeof isPublic !== 'boolean') {
+    return res.status(400).json({ message: 'Monitor ID and boolean isPublic are required.' });
+  }
+
+  try {
+    const { rows } = await query(
+      `UPDATE monitors
+       SET is_public = $1
+       WHERE id = $2
+       RETURNING id, name, is_public;`,
+      [isPublic, monitorId],
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Monitor not found.' });
+    }
+
+    return res.status(200).json({
+      message: `Monitor visibility updated to ${isPublic ? 'Public' : 'Private'}.`,
+      monitor: rows[0],
+    });
+  } catch (err) {
+    console.error('❌ [Admin Monitor Visibility] Update failed:', err.message);
+    return res.status(500).json({ message: 'Failed to update monitor visibility.' });
+  }
+};
+
 

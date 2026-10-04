@@ -8,6 +8,12 @@ import {
   updateUserRole,
   adminTestMonitor,
   adminDeleteMonitor,
+  getAdminSystemStatus,
+  updateAdminSystemStatus,
+  createAdminIncident,
+  updateAdminIncident,
+  deleteAdminIncident,
+  toggleMonitorVisibility,
 } from '../controller/adminController.js';
 
 const router = Router();
@@ -21,5 +27,13 @@ router.get('/monitors', getAdminMonitors);
 router.patch('/users/:id/role', updateUserRole);
 router.post('/monitors/:id/test', adminTestMonitor);
 router.delete('/monitors/:id', adminDeleteMonitor);
+
+// Status Page & Incident Management
+router.get('/system-status', getAdminSystemStatus);
+router.put('/system-status', updateAdminSystemStatus);
+router.post('/incidents', createAdminIncident);
+router.patch('/incidents/:id', updateAdminIncident);
+router.delete('/incidents/:id', deleteAdminIncident);
+router.patch('/monitors/:id/visibility', toggleMonitorVisibility);
 
 export default router;

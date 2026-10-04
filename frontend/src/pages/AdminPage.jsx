@@ -8,6 +8,12 @@ import {
   updateUserRole,
   testMonitorAsAdmin,
   deleteMonitorAsAdmin,
+  getAdminSystemStatus,
+  updateAdminSystemStatus,
+  createAdminIncident,
+  updateAdminIncident,
+  deleteAdminIncident,
+  toggleMonitorVisibility,
 } from '../api/adminApi';
 import {
   Users,
@@ -27,6 +33,9 @@ import {
   Layers,
   ArrowRight,
   Filter,
+  Megaphone,
+  Radio,
+  Plus,
 } from '../components/Icons';
 
 export const AdminPage = () => {
@@ -40,7 +49,7 @@ export const AdminPage = () => {
     }
   }, [user, navigate]);
 
-  const [activeTab, setActiveTab] = useState('users'); // 'users' | 'services' | 'cluster'
+  const [activeTab, setActiveTab] = useState('users'); // 'users' | 'services' | 'cluster' | 'status'
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
@@ -61,6 +70,25 @@ export const AdminPage = () => {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all');
   const [testingMonitorId, setTestingMonitorId] = useState(null);
   const [deletingMonitorId, setDeletingMonitorId] = useState(null);
+  const [togglingVisibilityId, setTogglingVisibilityId] = useState(null);
+
+  // Status Page & Incidents Tab State
+  const [statusMode, setStatusMode] = useState('auto');
+  const [announcementActive, setAnnouncementActive] = useState(false);
+  const [announcementLevel, setAnnouncementLevel] = useState('info');
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementMessage, setAnnouncementMessage] = useState('');
+  const [incidentsList, setIncidentsList] = useState([]);
+  const [isSavingStatus, setIsSavingStatus] = useState(false);
+  const [isCreatingIncident, setIsCreatingIncident] = useState(false);
+  const [showIncidentModal, setShowIncidentModal] = useState(false);
+  const [newIncident, setNewIncident] = useState({
+    title: '',
+    severity: 'minor',
+    status: 'investigating',
+    impactedComponents: '',
+    message: '',
+  });
 
   // Load Admin Data
   const loadAdminData = async (isManualRefresh = false) => {
@@ -69,15 +97,25 @@ export const AdminPage = () => {
     else setLoading(true);
 
     try {
-      const [overviewData, usersData, monitorsData] = await Promise.all([
+      const [overviewData, usersData, monitorsData, statusData] = await Promise.all([
         getAdminOverview(token),
         getAdminUsers(token),
         getAdminMonitors(token),
+        getAdminSystemStatus(token),
       ]);
 
       setOverview(overviewData);
       setUsersList(usersData.users || []);
       setMonitorsList(monitorsData.monitors || []);
+
+      if (statusData?.statusConfig) {
+        setStatusMode(statusData.statusConfig.mode || 'auto');
+        setAnnouncementActive(Boolean(statusData.statusConfig.is_announcement_active));
+        setAnnouncementLevel(statusData.statusConfig.announcement_level || 'info');
+        setAnnouncementTitle(statusData.statusConfig.announcement_title || '');
+        setAnnouncementMessage(statusData.statusConfig.announcement_message || '');
+      }
+      setIncidentsList(statusData?.incidents || []);
     } catch (err) {
       console.error('Failed to load admin telemetry:', err);
       setActionMessage({
@@ -191,6 +229,136 @@ export const AdminPage = () => {
     }
   };
 
+  // Handle Monitor Public/Private Toggle
+  const handleToggleVisibility = async (monitor) => {
+    if (!token || togglingVisibilityId) return;
+    setTogglingVisibilityId(monitor.id);
+    const newIsPublic = !monitor.isPublic;
+
+    try {
+      await toggleMonitorVisibility(token, monitor.id, newIsPublic);
+      setMonitorsList((prev) =>
+        prev.map((m) =>
+          m.id === monitor.id ? { ...m, isPublic: newIsPublic } : m
+        )
+      );
+      setActionMessage({
+        type: 'success',
+        text: `"${monitor.name}" is now ${newIsPublic ? 'Public on Status Page' : 'Private'}.`,
+      });
+    } catch (err) {
+      setActionMessage({
+        type: 'error',
+        text: err.message || 'Failed to update visibility.',
+      });
+    } finally {
+      setTogglingVisibilityId(null);
+    }
+  };
+
+  // Handle Status Configuration Save
+  const handleSaveStatusConfig = async () => {
+    if (!token || isSavingStatus) return;
+    setIsSavingStatus(true);
+
+    try {
+      await updateAdminSystemStatus(token, {
+        mode: statusMode,
+        isAnnouncementActive: announcementActive,
+        announcementLevel,
+        announcementTitle,
+        announcementMessage,
+      });
+
+      setActionMessage({
+        type: 'success',
+        text: 'System status and announcement configuration saved! Reflected across status page and dashboards.',
+      });
+    } catch (err) {
+      setActionMessage({
+        type: 'error',
+        text: err.message || 'Failed to update status settings.',
+      });
+    } finally {
+      setIsSavingStatus(false);
+    }
+  };
+
+  // Handle Create Incident
+  const handleCreateIncident = async (e) => {
+    e.preventDefault();
+    if (!token || isCreatingIncident) return;
+    if (!newIncident.title.trim() || !newIncident.message.trim()) {
+      alert('Title and update narrative are required.');
+      return;
+    }
+
+    setIsCreatingIncident(true);
+    try {
+      const res = await createAdminIncident(token, newIncident);
+      setIncidentsList((prev) => [res.incident, ...prev]);
+      setShowIncidentModal(false);
+      setNewIncident({
+        title: '',
+        severity: 'minor',
+        status: 'investigating',
+        impactedComponents: '',
+        message: '',
+      });
+      setActionMessage({
+        type: 'success',
+        text: 'Incident published to public status page.',
+      });
+    } catch (err) {
+      setActionMessage({
+        type: 'error',
+        text: err.message || 'Failed to create incident.',
+      });
+    } finally {
+      setIsCreatingIncident(false);
+    }
+  };
+
+  // Handle Update Incident Status
+  const handleUpdateIncidentStatus = async (incident, newStatus) => {
+    if (!token) return;
+    try {
+      const res = await updateAdminIncident(token, incident.id, { status: newStatus });
+      setIncidentsList((prev) =>
+        prev.map((i) => (i.id === incident.id ? res.incident : i))
+      );
+      setActionMessage({
+        type: 'success',
+        text: `Incident status updated to ${newStatus.toUpperCase()}.`,
+      });
+    } catch (err) {
+      setActionMessage({
+        type: 'error',
+        text: err.message || 'Failed to update incident.',
+      });
+    }
+  };
+
+  // Handle Delete Incident
+  const handleDeleteIncident = async (incidentId) => {
+    if (!token) return;
+    if (!window.confirm('Delete this incident record?')) return;
+
+    try {
+      await deleteAdminIncident(token, incidentId);
+      setIncidentsList((prev) => prev.filter((i) => i.id !== incidentId));
+      setActionMessage({
+        type: 'success',
+        text: 'Incident record removed.',
+      });
+    } catch (err) {
+      setActionMessage({
+        type: 'error',
+        text: err.message || 'Failed to delete incident.',
+      });
+    }
+  };
+
   // Switch to services tab filtered by specific user
   const handleFilterByUser = (userId) => {
     setSelectedUserFilter(String(userId));
@@ -297,6 +465,9 @@ export const AdminPage = () => {
             <RefreshCw size={15} className={refreshing ? 'spin-anim' : ''} />
             <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
           </button>
+          <Link to="/status" target="_blank" rel="noopener noreferrer" className="btn-secondary">
+            <span>Public Status ↗</span>
+          </Link>
           <Link to="/dashboard" className="btn-secondary">
             <span>Back to Console</span>
           </Link>
@@ -387,17 +558,37 @@ export const AdminPage = () => {
           </div>
         </div>
 
-        {/* 24h Checks */}
+        {/* System Status Mode Pill */}
         <div className="stat-card">
           <div className="stat-icon-wrap" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
-            <CheckCircle size={22} />
+            <Radio size={22} />
           </div>
           <div className="stat-info">
-            <span className="stat-label">24h Probes Dispatched</span>
+            <span className="stat-label">Status Page Mode</span>
             <div className="stat-value-group">
-              <span className="stat-number">
-                {overview?.checks?.last24Hours?.toLocaleString() ?? 0}
+              <span
+                style={{
+                  fontSize: '0.95rem',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  color:
+                    statusMode === 'auto'
+                      ? '#10b981'
+                      : statusMode === 'maintenance'
+                      ? '#a78bfa'
+                      : '#f59e0b',
+                }}
+              >
+                {statusMode}
               </span>
+              {announcementActive && (
+                <span style={{ fontSize: '0.75rem', background: 'rgba(59,130,246,0.2)', color: '#60a5fa', padding: '2px 8px', borderRadius: '12px' }}>
+                  📢 Banner On
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted, #888)', marginTop: '2px' }}>
+              {statusMode === 'auto' ? 'Automated live consensus' : 'Manual override active'}
             </div>
           </div>
         </div>
@@ -425,7 +616,7 @@ export const AdminPage = () => {
       </div>
 
       {/* Tabs Header */}
-      <div className="admin-tabs" style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-color, #27272a)', marginBottom: '1.5rem', paddingBottom: '0.5rem' }}>
+      <div className="admin-tabs" style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-color, #27272a)', marginBottom: '1.5rem', paddingBottom: '0.5rem', flexWrap: 'wrap' }}>
         <button
           className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
           onClick={() => setActiveTab('users')}
@@ -472,6 +663,41 @@ export const AdminPage = () => {
           <span style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.08)', padding: '1px 6px', borderRadius: '10px' }}>
             {monitorsList.length}
           </span>
+        </button>
+
+        <button
+          className={`tab-btn ${activeTab === 'status' ? 'active' : ''}`}
+          onClick={() => setActiveTab('status')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.65rem 1.25rem',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '0.9rem',
+            fontWeight: 600,
+            background: activeTab === 'status' ? 'rgba(139, 92, 246, 0.15)' : 'transparent',
+            color: activeTab === 'status' ? '#8b5cf6' : 'var(--text-muted, #a1a1aa)',
+          }}
+        >
+          <Radio size={16} />
+          <span>Status Page & Incidents</span>
+          {(statusMode !== 'auto' || announcementActive || incidentsList.some((i) => i.status !== 'resolved')) && (
+            <span
+              style={{
+                fontSize: '0.7rem',
+                background: statusMode === 'maintenance' ? 'rgba(139, 92, 246, 0.3)' : 'rgba(239, 68, 68, 0.3)',
+                color: statusMode === 'maintenance' ? '#a78bfa' : '#ef4444',
+                padding: '1px 6px',
+                borderRadius: '10px',
+                fontWeight: 700,
+              }}
+            >
+              ACTIVE
+            </span>
+          )}
         </button>
 
         <button
@@ -781,7 +1007,7 @@ export const AdminPage = () => {
               <option value="pending">PENDING Only</option>
             </select>
 
-            {/* Reset Filters button if any are active */}
+            {/* Reset Filters button */}
             {(selectedUserFilter !== 'all' ||
               selectedTypeFilter !== 'all' ||
               selectedStatusFilter !== 'all' ||
@@ -810,8 +1036,8 @@ export const AdminPage = () => {
                   <th style={{ padding: '0.85rem 1.25rem', fontWeight: 600, color: 'var(--text-muted, #a1a1aa)' }}>Owner (User)</th>
                   <th style={{ padding: '0.85rem 1.25rem', fontWeight: 600, color: 'var(--text-muted, #a1a1aa)' }}>Target Preview</th>
                   <th style={{ padding: '0.85rem 1.25rem', fontWeight: 600, color: 'var(--text-muted, #a1a1aa)' }}>Status</th>
+                  <th style={{ padding: '0.85rem 1.25rem', fontWeight: 600, color: 'var(--text-muted, #a1a1aa)' }}>Public Visibility</th>
                   <th style={{ padding: '0.85rem 1.25rem', fontWeight: 600, color: 'var(--text-muted, #a1a1aa)' }}>Interval</th>
-                  <th style={{ padding: '0.85rem 1.25rem', fontWeight: 600, color: 'var(--text-muted, #a1a1aa)' }}>Last Checked</th>
                   <th style={{ padding: '0.85rem 1.25rem', fontWeight: 600, color: 'var(--text-muted, #a1a1aa)', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
@@ -826,6 +1052,7 @@ export const AdminPage = () => {
                   filteredMonitors.map((m) => {
                     const isTesting = testingMonitorId === m.id;
                     const isDeleting = deletingMonitorId === m.id;
+                    const isTogglingVis = togglingVisibilityId === m.id;
 
                     const protocolBadgeStyle = {
                       http: { bg: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa' },
@@ -879,7 +1106,7 @@ export const AdminPage = () => {
                           </button>
                         </td>
 
-                        <td style={{ padding: '0.85rem 1.25rem', maxWidth: '280px' }}>
+                        <td style={{ padding: '0.85rem 1.25rem', maxWidth: '240px' }}>
                           <div
                             style={{
                               fontFamily: 'monospace',
@@ -940,14 +1167,32 @@ export const AdminPage = () => {
                           </span>
                         </td>
 
-                        <td style={{ padding: '0.85rem 1.25rem', whiteSpace: 'nowrap' }}>
-                          <span style={{ fontSize: '0.8rem' }}>{m.checkInterval}s</span>
+                        {/* Visibility Toggle */}
+                        <td style={{ padding: '0.85rem 1.25rem' }}>
+                          <button
+                            onClick={() => handleToggleVisibility(m)}
+                            disabled={isTogglingVis}
+                            title={m.isPublic ? 'Click to make private' : 'Click to showcase on public status page'}
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              border: 'none',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              background: m.isPublic ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+                              color: m.isPublic ? '#10b981' : 'var(--text-muted, #a1a1aa)',
+                            }}
+                          >
+                            <span>{m.isPublic ? '🌐 Public' : '🔒 Private'}</span>
+                          </button>
                         </td>
 
                         <td style={{ padding: '0.85rem 1.25rem', whiteSpace: 'nowrap' }}>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted, #a1a1aa)' }}>
-                            {timeAgo(m.lastCheckedAt)}
-                          </span>
+                          <span style={{ fontSize: '0.8rem' }}>{m.checkInterval}s</span>
                         </td>
 
                         <td style={{ padding: '0.85rem 1.25rem', textAlign: 'right' }}>
@@ -984,7 +1229,524 @@ export const AdminPage = () => {
         </div>
       )}
 
-      {/* TAB 3: CLUSTER & TELEMETRY */}
+      {/* TAB 3: STATUS PAGE & INCIDENTS MANAGEMENT */}
+      {activeTab === 'status' && (
+        <div className="admin-tab-content">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+            {/* Global Platform Mode Switcher */}
+            <div
+              style={{
+                background: 'var(--bg-card, #18181b)',
+                borderRadius: '12px',
+                border: '1px solid var(--border-color, #27272a)',
+                padding: '1.5rem',
+              }}
+            >
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem', margin: '0 0 0.5rem 0' }}>
+                <Radio size={18} style={{ color: '#10b981' }} />
+                <span>Global System Status Mode</span>
+              </h3>
+              <p style={{ fontSize: '0.825rem', color: 'var(--text-muted, #a1a1aa)', marginBottom: '1.25rem' }}>
+                Select whether the public status page derives status automatically from live worker consensus checks, or enforce a manual operational state.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1.25rem' }}>
+                {[
+                  {
+                    id: 'auto',
+                    title: 'Automated Live Consensus (Default)',
+                    desc: 'Real-time telemetry dynamically dictates health.',
+                    color: '#10b981',
+                  },
+                  {
+                    id: 'operational',
+                    title: 'Force Operational',
+                    desc: 'Display "All Systems Operational" regardless of minor test errors.',
+                    color: '#10b981',
+                  },
+                  {
+                    id: 'degraded',
+                    title: 'Degraded Performance',
+                    desc: 'Display yellow degraded performance advisory.',
+                    color: '#f59e0b',
+                  },
+                  {
+                    id: 'partial_outage',
+                    title: 'Partial Outage',
+                    desc: 'Warn users of localized node or service disruptions.',
+                    color: '#f97316',
+                  },
+                  {
+                    id: 'major_outage',
+                    title: 'Major Outage',
+                    desc: 'Red alert banner across status page and dashboards.',
+                    color: '#ef4444',
+                  },
+                  {
+                    id: 'maintenance',
+                    title: 'Scheduled Maintenance',
+                    desc: 'Notify visitors of planned platform upgrades.',
+                    color: '#a78bfa',
+                  },
+                ].map((modeOption) => (
+                  <label
+                    key={modeOption.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '0.75rem',
+                      padding: '0.75rem 1rem',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      background: statusMode === modeOption.id ? 'rgba(139, 92, 246, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                      border: `1px solid ${statusMode === modeOption.id ? 'rgba(139, 92, 246, 0.4)' : 'rgba(255, 255, 255, 0.06)'}`,
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="statusMode"
+                      value={modeOption.id}
+                      checked={statusMode === modeOption.id}
+                      onChange={(e) => setStatusMode(e.target.value)}
+                      style={{ marginTop: '3px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.875rem', color: modeOption.color }}>
+                        {modeOption.title}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted, #71717a)' }}>
+                        {modeOption.desc}
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <button
+                className="btn-primary"
+                onClick={handleSaveStatusConfig}
+                disabled={isSavingStatus}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                <span>{isSavingStatus ? 'Saving Configuration...' : 'Apply Status Mode'}</span>
+              </button>
+            </div>
+
+            {/* Platform Announcement Banner Manager */}
+            <div
+              style={{
+                background: 'var(--bg-card, #18181b)',
+                borderRadius: '12px',
+                border: '1px solid var(--border-color, #27272a)',
+                padding: '1.5rem',
+              }}
+            >
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem', margin: '0 0 0.5rem 0' }}>
+                <Megaphone size={18} style={{ color: '#3b82f6' }} />
+                <span>Broadcast Announcement Banner</span>
+              </h3>
+              <p style={{ fontSize: '0.825rem', color: 'var(--text-muted, #a1a1aa)', marginBottom: '1.25rem' }}>
+                Broadcast a prominent advisory across the Public Status Page, user dashboards, and alerts.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.25rem' }}>
+                {/* Active Toggle Switch */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.85rem', borderRadius: '8px', background: 'rgba(255,255,255,0.03)' }}>
+                  <div>
+                    <strong style={{ fontSize: '0.85rem' }}>Display Active Announcement</strong>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted, #71717a)' }}>Shows banner on public /status & /dashboard</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={announcementActive}
+                    onChange={(e) => setAnnouncementActive(e.target.checked)}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                </div>
+
+                {/* Level / Severity */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--text-muted, #a1a1aa)' }}>
+                    Announcement Severity
+                  </label>
+                  <select
+                    value={announcementLevel}
+                    onChange={(e) => setAnnouncementLevel(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 0.85rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color, #27272a)',
+                      background: 'var(--bg-card, #18181b)',
+                      color: 'inherit',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    <option value="info">Info (Blue) - General updates</option>
+                    <option value="maintenance">Maintenance (Purple) - Planned work</option>
+                    <option value="warning">Warning (Amber) - Degraded service advisory</option>
+                    <option value="critical">Critical (Red) - Severe incident alert</option>
+                  </select>
+                </div>
+
+                {/* Title */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--text-muted, #a1a1aa)' }}>
+                    Headline / Title
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Scheduled Network Migration Tonight"
+                    value={announcementTitle}
+                    onChange={(e) => setAnnouncementTitle(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 0.85rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color, #27272a)',
+                      background: 'var(--bg-card, #18181b)',
+                      color: 'inherit',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                </div>
+
+                {/* Narrative Message */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--text-muted, #a1a1aa)' }}>
+                    Full Narrative Description
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Detail the timeline, components involved, and expected impact..."
+                    value={announcementMessage}
+                    onChange={(e) => setAnnouncementMessage(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 0.85rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color, #27272a)',
+                      background: 'var(--bg-card, #18181b)',
+                      color: 'inherit',
+                      fontSize: '0.85rem',
+                      fontFamily: 'inherit',
+                      resize: 'vertical',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <button
+                className="btn-primary"
+                onClick={handleSaveStatusConfig}
+                disabled={isSavingStatus}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                <span>{isSavingStatus ? 'Publishing...' : 'Save & Broadcast Announcement'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* INCIDENT MANAGEMENT SECTION */}
+          <div
+            style={{
+              background: 'var(--bg-card, #18181b)',
+              borderRadius: '12px',
+              border: '1px solid var(--border-color, #27272a)',
+              padding: '1.5rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <AlertTriangle size={20} style={{ color: '#ef4444' }} />
+                  <span>Public System Incidents</span>
+                </h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-muted, #a1a1aa)' }}>
+                  Create and manage tracked incident events published to the status page history.
+                </p>
+              </div>
+
+              <button
+                className="btn-primary"
+                onClick={() => setShowIncidentModal(!showIncidentModal)}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <Plus size={16} />
+                <span>{showIncidentModal ? 'Close Form' : 'New Incident'}</span>
+              </button>
+            </div>
+
+            {/* Create Incident Inline Form */}
+            {showIncidentModal && (
+              <form
+                onSubmit={handleCreateIncident}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '10px',
+                  padding: '1.25rem',
+                  marginBottom: '1.5rem',
+                }}
+              >
+                <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.95rem' }}>Post Incident to Status Page</h4>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, marginBottom: '0.3rem', color: 'var(--text-muted, #a1a1aa)' }}>
+                      Incident Title *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Elevated HTTP API Gateway Latency"
+                      value={newIncident.title}
+                      onChange={(e) => setNewIncident({ ...newIncident, title: e.target.value })}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '0.55rem 0.75rem',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border-color, #27272a)',
+                        background: 'var(--bg-card, #18181b)',
+                        color: 'inherit',
+                        fontSize: '0.85rem',
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, marginBottom: '0.3rem', color: 'var(--text-muted, #a1a1aa)' }}>
+                      Initial Stage
+                    </label>
+                    <select
+                      value={newIncident.status}
+                      onChange={(e) => setNewIncident({ ...newIncident, status: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '0.55rem 0.75rem',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border-color, #27272a)',
+                        background: 'var(--bg-card, #18181b)',
+                        color: 'inherit',
+                        fontSize: '0.85rem',
+                      }}
+                    >
+                      <option value="investigating">Investigating</option>
+                      <option value="identified">Identified</option>
+                      <option value="monitoring">Monitoring</option>
+                      <option value="resolved">Resolved</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, marginBottom: '0.3rem', color: 'var(--text-muted, #a1a1aa)' }}>
+                      Severity
+                    </label>
+                    <select
+                      value={newIncident.severity}
+                      onChange={(e) => setNewIncident({ ...newIncident, severity: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '0.55rem 0.75rem',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border-color, #27272a)',
+                        background: 'var(--bg-card, #18181b)',
+                        color: 'inherit',
+                        fontSize: '0.85rem',
+                      }}
+                    >
+                      <option value="minor">Minor Degradation</option>
+                      <option value="major">Major Outage</option>
+                      <option value="critical">Critical Severity</option>
+                      <option value="maintenance">Maintenance</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, marginBottom: '0.3rem', color: 'var(--text-muted, #a1a1aa)' }}>
+                      Impacted Components
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. EU Worker Nodes, Payment API"
+                      value={newIncident.impactedComponents}
+                      onChange={(e) => setNewIncident({ ...newIncident, impactedComponents: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '0.55rem 0.75rem',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border-color, #27272a)',
+                        background: 'var(--bg-card, #18181b)',
+                        color: 'inherit',
+                        fontSize: '0.85rem',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, marginBottom: '0.3rem', color: 'var(--text-muted, #a1a1aa)' }}>
+                    Current Update Message *
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Describe the current engineering investigation or mitigation step..."
+                    value={newIncident.message}
+                    onChange={(e) => setNewIncident({ ...newIncident, message: e.target.value })}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 0.75rem',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border-color, #27272a)',
+                      background: 'var(--bg-card, #18181b)',
+                      color: 'inherit',
+                      fontSize: '0.85rem',
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                  <button type="button" className="btn-secondary" onClick={() => setShowIncidentModal(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-primary" disabled={isCreatingIncident}>
+                    <span>{isCreatingIncident ? 'Publishing...' : 'Publish Incident'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Incidents List */}
+            {incidentsList.length === 0 ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted, #71717a)' }}>
+                No active or past incidents recorded on the platform.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                {incidentsList.map((inc) => (
+                  <div
+                    key={inc.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      padding: '1rem 1.25rem',
+                      borderRadius: '8px',
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      border: `1px solid ${inc.status !== 'resolved' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255, 255, 255, 0.06)'}`,
+                      flexWrap: 'wrap',
+                      gap: '1rem',
+                    }}
+                  >
+                    <div style={{ flex: '1 1 300px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem' }}>
+                        <span
+                          style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            background:
+                              inc.status === 'resolved'
+                                ? 'rgba(16, 185, 129, 0.15)'
+                                : inc.status === 'investigating'
+                                ? 'rgba(239, 68, 68, 0.15)'
+                                : 'rgba(245, 158, 11, 0.15)',
+                            color:
+                              inc.status === 'resolved'
+                                ? '#10b981'
+                                : inc.status === 'investigating'
+                                ? '#ef4444'
+                                : '#f59e0b',
+                          }}
+                        >
+                          {inc.status}
+                        </span>
+                        <strong style={{ fontSize: '0.95rem' }}>{inc.title}</strong>
+                        {inc.severity && (
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted, #a1a1aa)', background: 'rgba(255,255,255,0.06)', padding: '1px 6px', borderRadius: '4px' }}>
+                            {inc.severity}
+                          </span>
+                        )}
+                      </div>
+
+                      {inc.impacted_components && (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted, #71717a)', marginBottom: '0.4rem' }}>
+                          Impacted: {inc.impacted_components}
+                        </div>
+                      )}
+
+                      <p style={{ margin: '0 0 0.4rem 0', fontSize: '0.85rem', color: 'var(--text-secondary, #d4d4d8)', lineHeight: 1.4 }}>
+                        {inc.message}
+                      </p>
+
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted, #71717a)' }}>
+                        Created: {formatTimestamp(inc.created_at)}
+                        {inc.resolved_at && ` • Resolved: ${formatTimestamp(inc.resolved_at)}`}
+                      </div>
+                    </div>
+
+                    {/* Quick Stage Progression Buttons */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      {inc.status !== 'resolved' ? (
+                        <>
+                          {inc.status === 'investigating' && (
+                            <button
+                              className="btn-secondary"
+                              onClick={() => handleUpdateIncidentStatus(inc, 'identified')}
+                              style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                            >
+                              Identified
+                            </button>
+                          )}
+                          {(inc.status === 'investigating' || inc.status === 'identified') && (
+                            <button
+                              className="btn-secondary"
+                              onClick={() => handleUpdateIncidentStatus(inc, 'monitoring')}
+                              style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                            >
+                              Monitoring
+                            </button>
+                          )}
+                          <button
+                            className="btn-primary"
+                            onClick={() => handleUpdateIncidentStatus(inc, 'resolved')}
+                            style={{ padding: '4px 8px', fontSize: '0.75rem', background: '#10b981', borderColor: '#10b981' }}
+                          >
+                            Resolve
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="btn-secondary"
+                          onClick={() => handleUpdateIncidentStatus(inc, 'investigating')}
+                          style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                        >
+                          Reopen
+                        </button>
+                      )}
+
+                      <button
+                        className="btn-secondary text-red"
+                        onClick={() => handleDeleteIncident(inc.id)}
+                        title="Delete incident"
+                        style={{ padding: '4px 8px', fontSize: '0.75rem', color: '#ef4444' }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: CLUSTER & TELEMETRY */}
       {activeTab === 'cluster' && (
         <div className="admin-tab-content">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>

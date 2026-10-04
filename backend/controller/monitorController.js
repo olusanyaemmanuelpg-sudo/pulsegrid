@@ -321,6 +321,69 @@ export const testMonitor = async (req, res) => {
 
 export const getPublicStatus = async (req, res) => {
   try {
+    // 1. Fetch platform system status mode and announcement
+    let systemStatus = {
+      mode: 'auto',
+      announcement: {
+        active: false,
+        title: '',
+        message: '',
+        level: 'info',
+        updatedAt: null,
+      },
+      effectiveStatus: 'operational',
+    };
+
+    try {
+      const statusRes = await readQuery(
+        `SELECT mode, announcement_title, announcement_message, announcement_level, is_announcement_active, updated_at
+         FROM system_status
+         WHERE id = 1
+         LIMIT 1;`,
+      );
+      if (statusRes.rows.length > 0) {
+        const row = statusRes.rows[0];
+        systemStatus = {
+          mode: row.mode || 'auto',
+          announcement: {
+            active: Boolean(row.is_announcement_active),
+            title: row.announcement_title || '',
+            message: row.announcement_message || '',
+            level: row.announcement_level || 'info',
+            updatedAt: row.updated_at,
+          },
+          effectiveStatus: 'operational',
+        };
+      }
+    } catch {
+      // Table may not yet be initialized in some test environments
+    }
+
+    // 2. Fetch active and recently resolved incidents
+    let activeIncidents = [];
+    let recentIncidents = [];
+    try {
+      const activeRes = await readQuery(
+        `SELECT id, title, status, severity, impacted_components, message, created_at, updated_at, resolved_at
+         FROM system_incidents
+         WHERE status != 'resolved'
+         ORDER BY created_at DESC;`,
+      );
+      activeIncidents = activeRes.rows;
+
+      const recentRes = await readQuery(
+        `SELECT id, title, status, severity, impacted_components, message, created_at, updated_at, resolved_at
+         FROM system_incidents
+         WHERE status = 'resolved' AND (resolved_at >= NOW() - INTERVAL '14 days' OR resolved_at IS NULL)
+         ORDER BY resolved_at DESC NULLS LAST
+         LIMIT 10;`,
+      );
+      recentIncidents = recentRes.rows;
+    } catch {
+      // Fall back if incidents table not ready
+    }
+
+    // 3. Fetch publicly showcased platform services
     const { rows } = await readQuery(`
       SELECT 
         m.id, 
@@ -330,13 +393,37 @@ export const getPublicStatus = async (req, res) => {
         m.last_latency_ms, 
         m.check_interval, 
         m.last_checked_at, 
-        m.created_at
+        m.created_at,
+        COALESCE(m.is_public, true) AS is_public
       FROM monitors m
+      WHERE COALESCE(m.is_public, true) = true
       ORDER BY m.created_at ASC;
     `);
 
+    // 4. Calculate effective system status
+    if (systemStatus.mode === 'auto') {
+      const totalCount = rows.length;
+      const downCount = rows.filter((m) => m.status === 'down').length;
+      if (totalCount > 0 && downCount === totalCount) {
+        systemStatus.effectiveStatus = 'major_outage';
+      } else if (downCount > 0) {
+        systemStatus.effectiveStatus = 'degraded';
+      } else {
+        systemStatus.effectiveStatus = 'operational';
+      }
+    } else {
+      systemStatus.effectiveStatus = systemStatus.mode;
+    }
+
     if (rows.length === 0) {
-      return res.status(200).json({ monitors: [] });
+      return res.status(200).json({
+        systemStatus,
+        incidents: {
+          active: activeIncidents,
+          recent: recentIncidents,
+        },
+        monitors: [],
+      });
     }
 
     const pipeline = redis.pipeline();
@@ -389,7 +476,14 @@ export const getPublicStatus = async (req, res) => {
       }),
     );
 
-    return res.status(200).json({ monitors: publicMonitors });
+    return res.status(200).json({
+      systemStatus,
+      incidents: {
+        active: activeIncidents,
+        recent: recentIncidents,
+      },
+      monitors: publicMonitors,
+    });
   } catch (error) {
     console.error('Public status fetch failed:', error.message);
     return res.status(500).json({ message: 'Unable to fetch public status.' });

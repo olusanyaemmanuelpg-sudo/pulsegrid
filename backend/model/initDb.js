@@ -107,6 +107,39 @@ export const initDb = async () => {
     CREATE INDEX IF NOT EXISTS idx_alert_channels_user ON alert_channels(user_id);
   `;
 
+  const createSystemStatusTableSQL = `
+    CREATE TABLE IF NOT EXISTS system_status (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      mode VARCHAR(30) NOT NULL DEFAULT 'auto',
+      announcement_title VARCHAR(255),
+      announcement_message TEXT,
+      announcement_level VARCHAR(30) DEFAULT 'info',
+      is_announcement_active BOOLEAN NOT NULL DEFAULT FALSE,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      updated_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      CONSTRAINT single_system_status CHECK (id = 1)
+    );
+    INSERT INTO system_status (id, mode, is_announcement_active)
+    VALUES (1, 'auto', false)
+    ON CONFLICT (id) DO NOTHING;
+  `;
+
+  const createSystemIncidentsTableSQL = `
+    CREATE TABLE IF NOT EXISTS system_incidents (
+      id SERIAL PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      status VARCHAR(30) NOT NULL DEFAULT 'investigating',
+      severity VARCHAR(30) NOT NULL DEFAULT 'minor',
+      impacted_components TEXT,
+      message TEXT NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      resolved_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_system_incidents_created ON system_incidents (created_at DESC);
+  `;
+
   const client = await writePool.connect();
   const ADVISORY_LOCK_ID = 987654321;
 
@@ -119,8 +152,13 @@ export const initDb = async () => {
     await client.query(createUsersTableSQL);
     await client.query(createMonitorsTableSQL);
     await client.query(createAlertChannelsTableSQL);
+    await client.query(createSystemStatusTableSQL);
+    await client.query(createSystemIncidentsTableSQL);
     await client.query(
       'ALTER TABLE monitors ADD COLUMN IF NOT EXISTS target_fingerprint TEXT;',
+    );
+    await client.query(
+      'ALTER TABLE monitors ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE;',
     );
     await client.query(addHeartbeatSecretColumnSQL);
     await client.query(backfillHeartbeatSecretsSQL);

@@ -85,3 +85,79 @@ export const deleteMonitorAsAdmin = async (token, monitorId) => {
   }
   return res.json();
 };
+
+export const getAdminSystemStatus = async (token) => {
+  const res = await fetch(`${API_BASE_URL}/api/admin/system-status`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || 'Failed to fetch system status configuration');
+  }
+  return res.json();
+};
+
+export const updateAdminSystemStatus = async (token, data) => {
+  const res = await fetch(`${API_BASE_URL}/api/admin/system-status`, {
+    method: 'PUT',
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || 'Failed to update system status configuration');
+  }
+  return res.json();
+};
+
+export const createAdminIncident = async (token, data) => {
+  const res = await fetch(`${API_BASE_URL}/api/admin/incidents`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || 'Failed to create incident');
+  }
+  return res.json();
+};
+
+export const updateAdminIncident = async (token, incidentId, data) => {
+  const res = await fetch(`${API_BASE_URL}/api/admin/incidents/${incidentId}`, {
+    method: 'PATCH',
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || 'Failed to update incident');
+  }
+  return res.json();
+};
+
+export const deleteAdminIncident = async (token, incidentId) => {
+  const res = await fetch(`${API_BASE_URL}/api/admin/incidents/${incidentId}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || 'Failed to delete incident');
+  }
+  return res.json();
+};
+
+export const toggleMonitorVisibility = async (token, monitorId, isPublic) => {
+  const res = await fetch(`${API_BASE_URL}/api/admin/monitors/${monitorId}/visibility`, {
+    method: 'PATCH',
+    headers: authHeaders(token),
+    body: JSON.stringify({ isPublic }),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || 'Failed to update monitor visibility');
+  }
+  return res.json();
+};
+

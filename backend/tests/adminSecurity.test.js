@@ -178,3 +178,73 @@ test('adminDeleteMonitor rejects invalid monitor ID with 400', async () => {
   assert.match(jsonBody.message, /Invalid monitor ID/i);
 });
 
+test('updateAdminSystemStatus rejects invalid mode with 400', async () => {
+  let status = null;
+  let jsonBody = null;
+
+  const req = { body: { mode: 'invalid-super-mode' }, user: { id: 1 } };
+  const res = {
+    status(code) {
+      status = code;
+      return {
+        json(body) {
+          jsonBody = body;
+        },
+      };
+    },
+  };
+
+  const { updateAdminSystemStatus } = await import('../controller/adminController.js');
+  await updateAdminSystemStatus(req, res);
+
+  assert.equal(status, 400);
+  assert.match(jsonBody.message, /Invalid status mode/i);
+});
+
+test('createAdminIncident rejects empty title or message with 400', async () => {
+  let status = null;
+  let jsonBody = null;
+
+  const req = { body: { title: '', message: '' }, user: { id: 1 } };
+  const res = {
+    status(code) {
+      status = code;
+      return {
+        json(body) {
+          jsonBody = body;
+        },
+      };
+    },
+  };
+
+  const { createAdminIncident } = await import('../controller/adminController.js');
+  await createAdminIncident(req, res);
+
+  assert.equal(status, 400);
+  assert.match(jsonBody.message, /Incident title and message are required/i);
+});
+
+test('toggleMonitorVisibility rejects non-boolean isPublic with 400', async () => {
+  let status = null;
+  let jsonBody = null;
+
+  const req = { params: { id: '1' }, body: { isPublic: 'yes' } };
+  const res = {
+    status(code) {
+      status = code;
+      return {
+        json(body) {
+          jsonBody = body;
+        },
+      };
+    },
+  };
+
+  const { toggleMonitorVisibility } = await import('../controller/adminController.js');
+  await toggleMonitorVisibility(req, res);
+
+  assert.equal(status, 400);
+  assert.match(jsonBody.message, /boolean isPublic are required/i);
+});
+
+
