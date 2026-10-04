@@ -131,3 +131,50 @@ test('updateUserRole blocks admin self-demotion with 400', async () => {
   assert.equal(status, 400);
   assert.match(jsonBody.message, /cannot revoke your own administrator privileges/i);
 });
+
+test('adminTestMonitor rejects invalid monitor ID with 400', async () => {
+  let status = null;
+  let jsonBody = null;
+
+  const req = { params: { id: 'abc' } };
+  const res = {
+    status(code) {
+      status = code;
+      return {
+        json(body) {
+          jsonBody = body;
+        },
+      };
+    },
+  };
+
+  const { adminTestMonitor } = await import('../controller/adminController.js');
+  await adminTestMonitor(req, res);
+
+  assert.equal(status, 400);
+  assert.match(jsonBody.message, /Invalid monitor ID/i);
+});
+
+test('adminDeleteMonitor rejects invalid monitor ID with 400', async () => {
+  let status = null;
+  let jsonBody = null;
+
+  const req = { params: { id: 'invalid' } };
+  const res = {
+    status(code) {
+      status = code;
+      return {
+        json(body) {
+          jsonBody = body;
+        },
+      };
+    },
+  };
+
+  const { adminDeleteMonitor } = await import('../controller/adminController.js');
+  await adminDeleteMonitor(req, res);
+
+  assert.equal(status, 400);
+  assert.match(jsonBody.message, /Invalid monitor ID/i);
+});
+

@@ -6,6 +6,8 @@ import {
   getAdminUsers,
   getAdminMonitors,
   updateUserRole,
+  adminTestMonitor,
+  adminDeleteMonitor,
 } from '../controller/adminController.js';
 
 const router = Router();
@@ -17,5 +19,7 @@ router.get('/overview', getAdminOverview);
 router.get('/users', getAdminUsers);
 router.get('/monitors', getAdminMonitors);
 router.patch('/users/:id/role', updateUserRole);
+router.post('/monitors/:id/test', adminTestMonitor);
+router.delete('/monitors/:id', adminDeleteMonitor);
 
 export default router;

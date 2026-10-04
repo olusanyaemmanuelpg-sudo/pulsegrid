@@ -6,6 +6,12 @@ import {
   decryptMonitorTarget,
   getMonitorTargetPreview,
 } from '../security/monitorTargetSecurity.js';
+import {
+  proberHttp,
+  probePostgres,
+  probeRedis,
+} from '../service/prober.js';
+import { recordProbeResult } from '../service/healthService.js';
 
 /**
  * Returns platform-wide system metrics, user growth, monitor statuses,
@@ -282,3 +288,98 @@ export const updateUserRole = async (req, res) => {
     return res.status(500).json({ message: 'Failed to update user role.' });
   }
 };
+
+/**
+ * Triggers an immediate manual probe for any platform monitor by admin.
+ */
+export const adminTestMonitor = async (req, res) => {
+  const monitorId = Number(req.params.id);
+  if (!monitorId) {
+    return res.status(400).json({ message: 'Invalid monitor ID.' });
+  }
+
+  try {
+    const { rows } = await query('SELECT * FROM monitors WHERE id = $1', [monitorId]);
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Monitor not found.' });
+    }
+
+    const monitor = {
+      ...rows[0],
+      target: decryptMonitorTarget(rows[0].target),
+    };
+
+    let result;
+    if (monitor.type === 'redis') {
+      result = await probeRedis(monitor.target);
+    } else if (monitor.type === 'postgres') {
+      result = await probePostgres(monitor.target);
+    } else if (monitor.type === 'cron') {
+      const referenceTime = monitor.last_checked_at
+        ? new Date(monitor.last_checked_at).getTime()
+        : new Date(monitor.created_at).getTime();
+
+      const elapsedSeconds = Math.floor((Date.now() - referenceTime) / 1000);
+      const gracePeriod = Math.max(60, Math.floor(monitor.check_interval * 0.2));
+      const maxAllowedSeconds = monitor.check_interval + gracePeriod;
+
+      result =
+        elapsedSeconds > maxAllowedSeconds
+          ? {
+              status: 'down',
+              latency: 0,
+              error: 'Heartbeat overdue / missed deadline',
+            }
+          : { status: 'up', latency: 0, error: null };
+    } else {
+      result = await proberHttp(monitor.target, monitor.keyword);
+    }
+
+    const { finalStatus } = await recordProbeResult(monitor, result);
+    const persistedStatus = finalStatus === 'pending_down' ? 'pending' : finalStatus;
+
+    await query(
+      `UPDATE monitors
+       SET status = $1, 
+           last_latency_ms = $2, 
+           last_checked_at = CASE WHEN type = 'cron' THEN last_checked_at ELSE NOW() END
+       WHERE id = $3;`,
+      [persistedStatus, result.latency, monitorId],
+    );
+
+    return res.status(200).json({
+      message: 'Probe test completed.',
+      status: persistedStatus,
+      latency: result.latency,
+      error: result.error,
+    });
+  } catch (error) {
+    console.error('❌ [Admin Test Monitor] Error:', error.message);
+    return res.status(500).json({ message: 'Unable to test monitor.' });
+  }
+};
+
+/**
+ * Removes any platform monitor by admin.
+ */
+export const adminDeleteMonitor = async (req, res) => {
+  const monitorId = Number(req.params.id);
+  if (!monitorId) {
+    return res.status(400).json({ message: 'Invalid monitor ID.' });
+  }
+
+  try {
+    const { rowCount } = await query('DELETE FROM monitors WHERE id = $1', [monitorId]);
+    if (rowCount === 0) {
+      return res.status(404).json({ message: 'Monitor not found.' });
+    }
+
+    await redis.del(`monitor:${monitorId}:checks`).catch(() => {});
+
+    return res.status(200).json({ message: 'Service removed from platform.' });
+  } catch (error) {
+    console.error('❌ [Admin Delete Monitor] Error:', error.message);
+    return res.status(500).json({ message: 'Unable to delete monitor.' });
+  }
+};
+
