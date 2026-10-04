@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { query } from '../config/db.js';
+import { isAdminEmail } from '../security/adminEmails.js';
 
 export const handleRegister = async (req, res) => {
   const { name, email, password } = req.body;
@@ -29,11 +30,12 @@ export const handleRegister = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const role = isAdminEmail(normalizedEmail) ? 'admin' : 'developer';
     const { rows: insertedRows } = await query(
       `INSERT INTO users (name, email, password_hash)
-       VALUES ($1, $2, $3)
+       VALUES ($1, $2, $3, $4)
        RETURNING id, name, email, role, created_at`,
-      [name, normalizedEmail, hashedPassword],
+      [name, normalizedEmail, hashedPassword, role],
     );
     const user = insertedRows[0];
     const token = jwt.sign(

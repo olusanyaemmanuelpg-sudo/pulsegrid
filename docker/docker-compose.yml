@@ -77,6 +77,7 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
       MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-olusanyaemmanuelpg@gmail.com}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173,http://localhost:3000}
       RATE_LIMIT_FAIL_OPEN: 'true'
     depends_on:
@@ -101,6 +102,7 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
       MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-olusanyaemmanuelpg@gmail.com}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173,http://localhost:3000}
       RATE_LIMIT_FAIL_OPEN: 'true'
     depends_on:

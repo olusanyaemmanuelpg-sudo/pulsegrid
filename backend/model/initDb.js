@@ -6,6 +6,7 @@ import {
   fingerprintMonitorTarget,
   isEncryptedMonitorTarget,
 } from '../security/monitorTargetSecurity.js';
+import { getAdminEmails } from '../security/adminEmails.js';
 
 const migrateMonitorTargets = async () => {
   assertMonitorTargetEncryptionKey();
@@ -164,19 +165,17 @@ export const initDb = async () => {
         COALESCE(NULLIF(btrim(keyword), ''), '')
       );
     `);
-    await client.query('DROP INDEX IF EXISTS monitors_unique_user_configuration_idx;');
+    await client.query(
+      'DROP INDEX IF EXISTS monitors_unique_user_configuration_idx;',
+    );
 
     // Promote administrator emails configured in ADMIN_EMAILS (or default admin accounts)
-    const adminEmails = (
-      process.env.ADMIN_EMAILS || 'webdeji@gmail.com,olusanyaemmanuelpg@gmail.com'
-    )
-      .split(',')
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean);
+    const adminEmails = getAdminEmails();
 
     if (adminEmails.length > 0) {
       await client.query(
-        `UPDATE users SET role = 'admin' WHERE lower(btrim(email)) = ANY($1::text[]);`, [adminEmails],
+        `UPDATE users SET role = 'admin' WHERE lower(btrim(email)) = ANY($1::text[]);`,
+        [adminEmails],
       );
     }
 
