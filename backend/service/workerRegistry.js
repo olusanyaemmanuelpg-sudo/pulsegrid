@@ -65,11 +65,41 @@ export const getActiveWorkers = async () => {
   }
 };
 
+let heartbeatIntervalId = null;
+
 /**
  * Starts sending heartbeats every 5 seconds.
  */
 export const startWorkerHeartbeat = () => {
   console.log(`🏷️ [Worker Node] Registered as: ${MY_WORKER_ID}`);
   registerWorkerHeartbeat();
-  return setInterval(registerWorkerHeartbeat, 5000);
+  if (heartbeatIntervalId) clearInterval(heartbeatIntervalId);
+  heartbeatIntervalId = setInterval(registerWorkerHeartbeat, 5000);
+  return heartbeatIntervalId;
+};
+
+/**
+ * Stops sending heartbeats.
+ */
+export const stopWorkerHeartbeat = () => {
+  if (heartbeatIntervalId) {
+    clearInterval(heartbeatIntervalId);
+    heartbeatIntervalId = null;
+  }
+};
+
+/**
+ * Deregisters a worker from the active registry immediately upon graceful shutdown.
+ * Prevents peers from having to wait 15 seconds for TTL expiry.
+ */
+export const unregisterWorker = async (workerId = MY_WORKER_ID) => {
+  try {
+    const pipeline = redis.pipeline();
+    pipeline.srem(REGISTRY_SET, workerId);
+    pipeline.del(`worker:heartbeat:${workerId}`);
+    await pipeline.exec();
+    console.log(`👋 [Worker Registry] Deregistered worker "${workerId}" from cluster ring.`);
+  } catch (err) {
+    console.error(`⚠️ [Worker Registry] Failed to deregister "${workerId}":`, err.message);
+  }
 };

@@ -10,7 +10,9 @@ import { useAuth } from './AuthContext';
 const MonitorContext = createContext();
 
 const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? 'http://localhost:3000' : '')
 ).replace(/\/+$/, '');
 
 // Formats timestamp into "Just now", "2m ago", etc.

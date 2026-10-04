@@ -79,6 +79,8 @@ export const flushTelemetryBuffer = async (batchSize = 100) => {
   }
 };
 
+let flusherIntervalId = null;
+
 /**
  * Starts the periodic background buffer flusher (e.g. every 15 seconds).
  */
@@ -86,5 +88,17 @@ export const startTelemetryFlusher = (intervalMs = 15000) => {
   console.log(
     `⚡ [Write-Behind Engine] Telemetry flusher started (Draining buffer every ${intervalMs / 1000}s)...`,
   );
-  return setInterval(flushTelemetryBuffer, intervalMs);
+  if (flusherIntervalId) clearInterval(flusherIntervalId);
+  flusherIntervalId = setInterval(flushTelemetryBuffer, intervalMs);
+  return flusherIntervalId;
+};
+
+/**
+ * Stops the periodic buffer flusher.
+ */
+export const stopTelemetryFlusher = () => {
+  if (flusherIntervalId) {
+    clearInterval(flusherIntervalId);
+    flusherIntervalId = null;
+  }
 };

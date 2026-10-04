@@ -164,11 +164,22 @@ export const runSchedulerCycle = async () => {
   }
 };
 
+let schedulerIntervalId = null;
+
 export const startScheduler = (intervalMs = 10000) => {
   console.log(
     `⚡ [Scheduler] PulseGrid background worker started (Ticking every ${intervalMs / 1000}s)...`,
   );
   // Run once immediately, then on an interval
   runSchedulerCycle();
-  return setInterval(runSchedulerCycle, intervalMs);
+  if (schedulerIntervalId) clearInterval(schedulerIntervalId);
+  schedulerIntervalId = setInterval(runSchedulerCycle, intervalMs);
+  return schedulerIntervalId;
+};
+
+export const stopScheduler = () => {
+  if (schedulerIntervalId) {
+    clearInterval(schedulerIntervalId);
+    schedulerIntervalId = null;
+  }
 };

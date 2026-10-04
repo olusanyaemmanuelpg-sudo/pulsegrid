@@ -2,7 +2,9 @@ import React, { createContext, useContext, useState } from 'react';
 
 const AuthContext = createContext();
 const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? 'http://localhost:3000' : '')
 ).replace(/\/+$/, '');
 const USER_STORAGE_KEY = 'pulsegrid-user';
 const TOKEN_STORAGE_KEY = 'pulsegrid-token';

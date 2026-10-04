@@ -1,7 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { query, isUsingDedicatedReplica } from './config/db.js';
+import { query, isUsingDedicatedReplica, closePools } from './config/db.js';
+import { redis } from './config/redis.js';
 import { initDb } from './model/initDb.js';
 import registerRouter from './routes/register.js';
 import loginRouter from './routes/login.js';
@@ -63,6 +64,43 @@ app.use(requireAuth);
 app.use('/api/monitors', monitorRoutes);
 app.use('/api/alerts', alertRoutes);
 
+let serverInstance = null;
+let isShuttingDown = false;
+
+const handleServerShutdown = async (signal) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`🛑 [PulseGrid API ${INSTANCE_ID}] Received ${signal}, initiating graceful shutdown...`);
+
+  const forceTimeout = setTimeout(() => {
+    console.error(`⚠️ [${INSTANCE_ID}] Graceful shutdown timed out (10s). Forcing process exit.`);
+    process.exit(1);
+  }, 10000);
+  forceTimeout.unref();
+
+  if (serverInstance) {
+    serverInstance.close(async () => {
+      console.log(`🔒 [${INSTANCE_ID}] Stopped accepting new HTTP connections.`);
+      try {
+        await closePools();
+        await redis.quit();
+        console.log(`✅ [${INSTANCE_ID}] API node shut down cleanly.`);
+        process.exit(0);
+      } catch (err) {
+        console.error(`❌ [${INSTANCE_ID}] Error closing resources:`, err.message);
+        process.exit(1);
+      }
+    });
+  } else {
+    await closePools();
+    await redis.quit();
+    process.exit(0);
+  }
+};
+
+process.on('SIGTERM', () => handleServerShutdown('SIGTERM'));
+process.on('SIGINT', () => handleServerShutdown('SIGINT'));
+
 const startServer = async () => {
   await initDb();
   const runWorkers = process.env.RUN_WORKERS !== 'false';
@@ -78,7 +116,7 @@ const startServer = async () => {
     );
   }
 
-  app.listen(port, () => {
+  serverInstance = app.listen(port, () => {
     console.log(`🚀 PulseGrid API [${INSTANCE_ID}] listening at http://localhost:${port}`);
     console.log(
       `📊 Database topology: ${isUsingDedicatedReplica ? 'read replica enabled' : 'primary-only mode (reads use primary)'}`,
