@@ -52,6 +52,13 @@ export const writePool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
+writePool.on('error', (err) => {
+  console.error(
+    '❌ [PostgreSQL Primary Pool] Unexpected error on idle client:',
+    err.message,
+  );
+});
+
 // 2. READ REPLICA POOL (Follower / Read-Only Replica)
 // If DATABASE_READ_URL is not set, the app intentionally uses the primary for reads.
 export const isUsingDedicatedReplica = replicaConfig.enabled;
@@ -63,6 +70,13 @@ export const readPool = new Pool({
   max: Number(process.env.DB_READ_POOL_SIZE || 20),
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
+});
+
+readPool.on('error', (err) => {
+  console.warn(
+    '⚠️ [PostgreSQL Read Replica Pool] Unexpected error on idle client:',
+    err.message,
+  );
 });
 
 /**
@@ -86,6 +100,18 @@ export const readQuery = async (text, params) => {
       `⚠️ [DB Read Replica] Read failed (${err.message}). Failing over to Primary Master...`,
     );
     return await writePool.query(text, params);
+  }
+};
+
+/**
+ * Gracefully drains and closes both connection pools.
+ */
+export const closePools = async () => {
+  try {
+    await Promise.allSettled([writePool.end(), readPool.end()]);
+    console.log('🔒 [PostgreSQL] Database connection pools closed cleanly.');
+  } catch (err) {
+    console.error('⚠️ [PostgreSQL] Error closing pools:', err.message);
   }
 };
 

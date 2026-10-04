@@ -10,8 +10,9 @@ export const redis = new Redis(redisUrl, {
   maxRetriesPerRequest: 3,
   lazyConnect: process.env.NODE_ENV === 'test',
   retryStrategy(times) {
-    if (process.env.NODE_ENV === 'test' || times > 5) return null;
-    const delay = Math.min(times * 100, 3000);
+    if (process.env.NODE_ENV === 'test') return null;
+    // Exponential backoff capped at 5000ms, retries indefinitely in production
+    const delay = Math.min(times * 200, 5000);
     return delay;
   },
 });

@@ -1,4 +1,4 @@
-import { query } from '../config/db.js';
+import { query, writePool } from '../config/db.js';
 import {
   assertMonitorTargetEncryptionKey,
   decryptMonitorTarget,
@@ -106,28 +106,35 @@ export const initDb = async () => {
     CREATE INDEX IF NOT EXISTS idx_alert_channels_user ON alert_channels(user_id);
   `;
 
+  const client = await writePool.connect();
+  const ADVISORY_LOCK_ID = 987654321;
+
   try {
     assertMonitorTargetEncryptionKey();
-    await query(createUsersTableSQL);
-    await query(createMonitorsTableSQL);
-    await query(createAlertChannelsTableSQL);
-    await query(
+
+    // Acquire PostgreSQL advisory lock to serialize DDL migrations across horizontally scaled nodes
+    await client.query('SELECT pg_advisory_lock($1);', [ADVISORY_LOCK_ID]);
+
+    await client.query(createUsersTableSQL);
+    await client.query(createMonitorsTableSQL);
+    await client.query(createAlertChannelsTableSQL);
+    await client.query(
       'ALTER TABLE monitors ADD COLUMN IF NOT EXISTS target_fingerprint TEXT;',
     );
-    await query(addHeartbeatSecretColumnSQL);
-    await query(backfillHeartbeatSecretsSQL);
-    await query(createHeartbeatSecretIndexSQL);
-    await query(createMonitorChecksTableSQL);
-    await query(
+    await client.query(addHeartbeatSecretColumnSQL);
+    await client.query(backfillHeartbeatSecretsSQL);
+    await client.query(createHeartbeatSecretIndexSQL);
+    await client.query(createMonitorChecksTableSQL);
+    await client.query(
       'UPDATE monitors SET check_interval = 30 WHERE check_interval IS NULL;',
     );
-    await query(
+    await client.query(
       'ALTER TABLE monitors ALTER COLUMN check_interval SET DEFAULT 30;',
     );
-    await query(
+    await client.query(
       'ALTER TABLE monitors ALTER COLUMN check_interval SET NOT NULL;',
     );
-    await query(`
+    await client.query(`
       WITH ranked_monitors AS (
         SELECT id,
           ROW_NUMBER() OVER (
@@ -143,10 +150,10 @@ export const initDb = async () => {
         AND ranked_monitors.duplicate_rank > 1;
     `);
     await migrateMonitorTargets();
-    await query(
+    await client.query(
       'ALTER TABLE monitors ALTER COLUMN target_fingerprint SET NOT NULL;',
     );
-    await query(`
+    await client.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS monitors_unique_user_fingerprint_idx
       ON monitors (
         user_id,
@@ -157,12 +164,19 @@ export const initDb = async () => {
         COALESCE(NULLIF(btrim(keyword), ''), '')
       );
     `);
-    await query('DROP INDEX IF EXISTS monitors_unique_user_configuration_idx;');
+    await client.query('DROP INDEX IF EXISTS monitors_unique_user_configuration_idx;');
     console.log(
       '✅ PostgreSQL: tables and monitor uniqueness verified successfully.',
     );
   } catch (err) {
     console.error('❌ Failed to initialize database table:', err.message);
     throw err;
+  } finally {
+    try {
+      await client.query('SELECT pg_advisory_unlock($1);', [ADVISORY_LOCK_ID]);
+    } catch {
+      // Ignored if connection closed
+    }
+    client.release();
   }
 };
