@@ -211,7 +211,7 @@ export const AlertChannelsModal = ({ isOpen, onClose }) => {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
-        className="modal-container"
+        className="modal-content"
         style={{ maxWidth: '640px' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -226,12 +226,15 @@ export const AlertChannelsModal = ({ isOpen, onClose }) => {
               </p>
             </div>
           </div>
-          <button className="modal-close-btn" onClick={onClose}>
+          <button className="btn-close" onClick={onClose}>
             ✕
           </button>
         </div>
 
-        <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+        <div
+          className="modal-body"
+          style={{ maxHeight: '70vh', overflowY: 'auto', padding: '1.25rem' }}
+        >
           {/* Header Action */}
           <div
             style={{
@@ -287,7 +290,13 @@ export const AlertChannelsModal = ({ isOpen, onClose }) => {
               {/* Channel Type Selector */}
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label className="form-label">Channel Type</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, 1fr)',
+                    gap: '0.5rem',
+                  }}
+                >
                   {[
                     { id: 'discord', label: 'Discord' },
                     { id: 'telegram', label: 'Telegram' },
@@ -304,9 +313,16 @@ export const AlertChannelsModal = ({ isOpen, onClose }) => {
                         fontSize: '0.75rem',
                         textAlign: 'center',
                         borderRadius: '6px',
-                        border: type === t.id ? '1px solid var(--primary)' : '1px solid var(--border-color)',
-                        background: type === t.id ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-                        color: type === t.id ? 'var(--primary)' : 'var(--text-main)',
+                        border:
+                          type === t.id
+                            ? '1px solid var(--primary)'
+                            : '1px solid var(--border-color)',
+                        background:
+                          type === t.id
+                            ? 'rgba(59, 130, 246, 0.1)'
+                            : 'transparent',
+                        color:
+                          type === t.id ? 'var(--primary)' : 'var(--text-main)',
                         cursor: 'pointer',
                       }}
                     >
@@ -333,7 +349,9 @@ export const AlertChannelsModal = ({ isOpen, onClose }) => {
               {(type === 'discord' || type === 'webhook') && (
                 <div className="form-group" style={{ marginBottom: '1rem' }}>
                   <label className="form-label">
-                    {type === 'discord' ? 'Discord Webhook URL' : 'Webhook Endpoint URL'}
+                    {type === 'discord'
+                      ? 'Discord Webhook URL'
+                      : 'Webhook Endpoint URL'}
                   </label>
                   <input
                     type="url"
@@ -352,7 +370,9 @@ export const AlertChannelsModal = ({ isOpen, onClose }) => {
 
               {type === 'webhook' && (
                 <div className="form-group" style={{ marginBottom: '1rem' }}>
-                  <label className="form-label">HMAC / Auth Signature Token (Optional)</label>
+                  <label className="form-label">
+                    HMAC / Auth Signature Token (Optional)
+                  </label>
                   <input
                     type="text"
                     className="form-input"
@@ -391,7 +411,13 @@ export const AlertChannelsModal = ({ isOpen, onClose }) => {
                 </div>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: '0.5rem',
+                }}
+              >
                 <button
                   type="button"
                   className="btn-secondary"
@@ -416,20 +442,36 @@ export const AlertChannelsModal = ({ isOpen, onClose }) => {
                 padding: '0.75rem 1rem',
                 borderRadius: '6px',
                 marginBottom: '1rem',
-                background: testResult.success ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                border: testResult.success ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
-                color: testResult.success ? 'var(--status-up)' : 'var(--status-down)',
+                background: testResult.success
+                  ? 'rgba(16, 185, 129, 0.1)'
+                  : 'rgba(239, 68, 68, 0.1)',
+                border: testResult.success
+                  ? '1px solid rgba(16, 185, 129, 0.3)'
+                  : '1px solid rgba(239, 68, 68, 0.3)',
+                color: testResult.success
+                  ? 'var(--status-up)'
+                  : 'var(--status-down)',
                 fontSize: '0.875rem',
               }}
             >
-              {testResult.success ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
+              {testResult.success ? (
+                <CheckCircle size={18} />
+              ) : (
+                <AlertTriangle size={18} />
+              )}
               <span>{testResult.message}</span>
             </div>
           )}
 
           {/* Channels List */}
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '2rem',
+                color: 'var(--text-muted)',
+              }}
+            >
               Loading alert channels...
             </div>
           ) : channels.length === 0 ? (
@@ -442,18 +484,31 @@ export const AlertChannelsModal = ({ isOpen, onClose }) => {
                 color: 'var(--text-muted)',
               }}
             >
-              <Bell size={32} style={{ margin: '0 auto 0.75rem', opacity: 0.5 }} />
+              <Bell
+                size={32}
+                style={{ margin: '0 auto 0.75rem', opacity: 0.5 }}
+              />
               <p style={{ fontWeight: 500, marginBottom: '0.25rem' }}>
                 No Alert Channels Configured
               </p>
               <p style={{ fontSize: '0.8rem' }}>
-                Add Discord webhooks, Slack, or Telegram to receive real-time incident notifications.
+                Add Discord webhooks, Slack, or Telegram to receive real-time
+                incident notifications.
               </p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem',
+              }}
+            >
               {channels.map((ch) => {
-                const cfg = typeof ch.config === 'string' ? JSON.parse(ch.config) : ch.config || {};
+                const cfg =
+                  typeof ch.config === 'string'
+                    ? JSON.parse(ch.config)
+                    : ch.config || {};
                 const isTesting = testingId === ch.id;
 
                 return (
@@ -470,7 +525,13 @@ export const AlertChannelsModal = ({ isOpen, onClose }) => {
                       opacity: ch.is_enabled ? 1 : 0.6,
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.75rem',
+                      }}
+                    >
                       <div
                         style={{
                           width: '36px',
@@ -485,8 +546,16 @@ export const AlertChannelsModal = ({ isOpen, onClose }) => {
                         {getChannelIcon(ch.type)}
                       </div>
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <strong style={{ fontSize: '0.9rem' }}>{ch.name}</strong>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                          }}
+                        >
+                          <strong style={{ fontSize: '0.9rem' }}>
+                            {ch.name}
+                          </strong>
                           <span
                             style={{
                               fontSize: '0.7rem',
@@ -511,19 +580,31 @@ export const AlertChannelsModal = ({ isOpen, onClose }) => {
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          {cfg.webhook_url || cfg.email || `Chat: ${cfg.chat_id || 'System Bot'}`}
+                          {cfg.webhook_url ||
+                            cfg.email ||
+                            `Chat: ${cfg.chat_id || 'System Bot'}`}
                         </p>
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                      }}
+                    >
                       {/* Active toggle */}
                       <button
                         className="btn-icon"
-                        title={ch.is_enabled ? 'Disable Channel' : 'Enable Channel'}
+                        title={
+                          ch.is_enabled ? 'Disable Channel' : 'Enable Channel'
+                        }
                         onClick={() => handleToggleEnable(ch)}
                         style={{
-                          color: ch.is_enabled ? 'var(--status-up)' : 'var(--text-muted)',
+                          color: ch.is_enabled
+                            ? 'var(--status-up)'
+                            : 'var(--text-muted)',
                         }}
                       >
                         <CheckCircle size={16} />

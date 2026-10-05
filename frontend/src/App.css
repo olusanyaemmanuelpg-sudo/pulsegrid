@@ -2291,6 +2291,7 @@
 
 .btn-primary-large {
   background: var(--text-main);
+  color: var(--bg-primary) !important;
   box-shadow: none;
 }
 

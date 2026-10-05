@@ -21,6 +21,12 @@ const escapeHtml = (value) =>
     return map[c];
   });
 
+const escapeSlackText = (value) =>
+  String(value ?? '').replace(/[&<>]/g, (character) => {
+    const entities = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+    return entities[character];
+  });
+
 /**
  * Dispatches an event to Discord via Webhook using Rich Embeds.
  */
@@ -139,20 +145,36 @@ export const dispatchWebhook = async (
     throw new Error('Webhook URL is required.');
   }
 
-  const payload = {
-    event: `monitor.${event.eventType}`,
-    monitor: event.monitor
-      ? {
-          id: event.monitor.id,
-          name: event.monitor.name,
-          type: event.monitor.type,
-          status: event.eventType === 'down' ? 'down' : 'up',
-        }
-      : null,
-    latency_ms: event.latency ?? 0,
-    error: event.error ?? null,
-    timestamp: event.timestamp || new Date().toISOString(),
-  };
+  const slackHosts = new Set(['hooks.slack.com', 'hooks.slack-gov.com']);
+  const isSlackWebhook = slackHosts.has(new URL(webhookUrl).hostname);
+  const payload = isSlackWebhook
+    ? {
+        text: [
+          `*PulseGrid ${String(event.eventType || 'test').toUpperCase()} alert*`,
+          `• *Service:* ${escapeSlackText(event.monitor?.name || 'Unknown service')}`,
+          `• *Type:* ${escapeSlackText(event.monitor?.type || 'unknown').toUpperCase()}`,
+          `• *Status:* ${event.eventType === 'down' ? 'DOWN' : event.eventType === 'recovery' ? 'RECOVERED' : 'TEST'}`,
+          `• *Latency:* ${event.latency ?? 0} ms`,
+          ...(event.error
+            ? [`• *Reason:* ${escapeSlackText(event.error)}`]
+            : []),
+          `• *Time:* ${event.timestamp || new Date().toISOString()}`,
+        ].join('\n'),
+      }
+    : {
+        event: `monitor.${event.eventType}`,
+        monitor: event.monitor
+          ? {
+              id: event.monitor.id,
+              name: event.monitor.name,
+              type: event.monitor.type,
+              status: event.eventType === 'down' ? 'down' : 'up',
+            }
+          : null,
+        latency_ms: event.latency ?? 0,
+        error: event.error ?? null,
+        timestamp: event.timestamp || new Date().toISOString(),
+      };
 
   const headers = { 'Content-Type': 'application/json' };
   if (secretHeader) {
@@ -160,28 +182,14 @@ export const dispatchWebhook = async (
   }
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    let res;
     try {
-      const res = await fetch(webhookUrl, {
+      res = await fetch(webhookUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(5000),
       });
-
-      if (res.ok) {
-        console.log(
-          `🌐 [Webhook] ${event.eventType.toUpperCase()} alert delivered to ${webhookUrl}`,
-        );
-        return { success: true, channel: 'webhook' };
-      }
-
-      if (
-        (res.status !== 429 && res.status < 500) ||
-        attempt === MAX_ATTEMPTS
-      ) {
-        throw new Error(`Webhook endpoint returned HTTP ${res.status}`);
-      }
-      await wait(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
     } catch (err) {
       if (attempt === MAX_ATTEMPTS) {
         console.error(
@@ -191,7 +199,28 @@ export const dispatchWebhook = async (
         throw err;
       }
       await wait(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+      continue;
     }
+
+    if (res.ok) {
+      console.log(
+        `🌐 [Webhook] ${event.eventType.toUpperCase()} alert delivered.`,
+      );
+      return { success: true, channel: 'webhook' };
+    }
+
+    const retryable = res.status === 429 || res.status >= 500;
+    if (retryable && attempt < MAX_ATTEMPTS) {
+      await wait(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+      continue;
+    }
+
+    const responseText = (await res.text().catch(() => ''))
+      .trim()
+      .slice(0, 300);
+    throw new Error(
+      `Webhook endpoint returned HTTP ${res.status}${responseText ? `: ${responseText}` : ''}`,
+    );
   }
 };
 

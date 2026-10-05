@@ -122,6 +122,45 @@ test('dispatchWebhook sends JSON payload with custom signature header', async ()
   assert.equal(capturedBody.monitor.id, 42);
 });
 
+test('dispatchWebhook sends Slack-compatible text to incoming webhooks', async () => {
+  let capturedBody = null;
+  globalThis.fetch = async (_url, options) => {
+    capturedBody = JSON.parse(options.body);
+    return new Response('ok', { status: 200 });
+  };
+
+  await dispatchWebhook(
+    'https://hooks.slack.com/services/T00000000/B00000000/test-token',
+    {
+      eventType: 'test',
+      monitor: { name: 'PulseGrid Test Monitor', type: 'http' },
+      latency: 42,
+    },
+  );
+
+  assert.match(capturedBody.text, /PulseGrid TEST alert/);
+  assert.match(capturedBody.text, /PulseGrid Test Monitor/);
+  assert.match(capturedBody.text, /42 ms/);
+});
+
+test('dispatchWebhook reports permanent response details without retrying', async () => {
+  let attempts = 0;
+  globalThis.fetch = async () => {
+    attempts += 1;
+    return new Response('invalid_payload', { status: 400 });
+  };
+
+  await assert.rejects(
+    dispatchWebhook('https://hooks.slack.com/services/test', {
+      eventType: 'test',
+      monitor: { name: 'PulseGrid Test Monitor', type: 'http' },
+    }),
+    /HTTP 400: invalid_payload/,
+  );
+
+  assert.equal(attempts, 1);
+});
+
 test('dispatchEmail returns success with recipient', async () => {
   const res = await dispatchEmail('ops-team@pulsegrid.io', {
     eventType: 'down',
