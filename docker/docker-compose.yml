@@ -1,12 +1,17 @@
+x-backend: &backend
+  image: pulsegrid-backend:latest
+  build:
+    context: ../backend
+    dockerfile: Dockerfile
+
 services:
   primary:
     image: postgres:15
-    container_name: pulsegrid-primary
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in docker/.env}
-      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?Set REPLICATION_PASSWORD in docker/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in Coolify}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?Set REPLICATION_PASSWORD in Coolify}
       POSTGRES_DB: pulsegrid
     ports:
       - '127.0.0.1:5432:5432'
@@ -31,13 +36,12 @@ services:
 
   replica:
     image: postgres:15
-    container_name: pulsegrid-replica
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in docker/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in Coolify}
       POSTGRES_DB: pulsegrid
-      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?Set REPLICATION_PASSWORD in docker/.env}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?Set REPLICATION_PASSWORD in Coolify}
     ports:
       - '127.0.0.1:5433:5432'
     volumes:
@@ -52,19 +56,14 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: pulsegrid-redis
     restart: unless-stopped
     ports:
       - '127.0.0.1:6380:6379'
     networks:
       - pulsegrid-net
 
-  # ==========================================
-  # HORIZONTALLY SCALED WEB API TIER (STATELESS)
-  # ==========================================
   api-1:
-    image: pulsegrid-backend:latest
-    container_name: pulsegrid-api-1
+    <<: *backend
     restart: unless-stopped
     environment:
       PORT: 3000
@@ -75,10 +74,10 @@ services:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
       DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@replica:5432/pulsegrid
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET}
-      MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY}
-      ADMIN_EMAILS: ${ADMIN_EMAILS:-olusanyaemmanuelpg@gmail.com}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173,http://localhost:3000}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Coolify}
+      MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY:?Set MONITOR_TARGET_ENCRYPTION_KEY in Coolify}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:?Set ADMIN_EMAILS in Coolify}
+      CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN to the public HTTPS site origin in Coolify}
       RATE_LIMIT_FAIL_OPEN: 'true'
     depends_on:
       - primary
@@ -88,8 +87,7 @@ services:
       - pulsegrid-net
 
   api-2:
-    image: pulsegrid-backend:latest
-    container_name: pulsegrid-api-2
+    <<: *backend
     restart: unless-stopped
     environment:
       PORT: 3000
@@ -100,10 +98,10 @@ services:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
       DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@replica:5432/pulsegrid
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET}
-      MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY}
-      ADMIN_EMAILS: ${ADMIN_EMAILS:-olusanyaemmanuelpg@gmail.com}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173,http://localhost:3000}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Coolify}
+      MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY:?Set MONITOR_TARGET_ENCRYPTION_KEY in Coolify}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:?Set ADMIN_EMAILS in Coolify}
+      CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN to the public HTTPS site origin in Coolify}
       RATE_LIMIT_FAIL_OPEN: 'true'
     depends_on:
       - primary
@@ -112,12 +110,8 @@ services:
     networks:
       - pulsegrid-net
 
-  # ==========================================
-  # HORIZONTALLY SCALED PROBER WORKER CLUSTER
-  # ==========================================
   worker-1:
-    image: pulsegrid-backend:latest
-    container_name: pulsegrid-worker-1
+    <<: *backend
     restart: unless-stopped
     command: ['node', 'worker.js']
     environment:
@@ -127,7 +121,7 @@ services:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
       DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@replica:5432/pulsegrid
       REDIS_URL: redis://redis:6379
-      MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY}
+      MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY:?Set MONITOR_TARGET_ENCRYPTION_KEY in Coolify}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       SMTP_HOST: ${SMTP_HOST:-}
@@ -141,8 +135,7 @@ services:
       - pulsegrid-net
 
   worker-2:
-    image: pulsegrid-backend:latest
-    container_name: pulsegrid-worker-2
+    <<: *backend
     restart: unless-stopped
     command: ['node', 'worker.js']
     environment:
@@ -152,7 +145,7 @@ services:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
       DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@replica:5432/pulsegrid
       REDIS_URL: redis://redis:6379
-      MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY}
+      MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY:?Set MONITOR_TARGET_ENCRYPTION_KEY in Coolify}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       SMTP_HOST: ${SMTP_HOST:-}
@@ -165,18 +158,14 @@ services:
     networks:
       - pulsegrid-net
 
-  # ==========================================
-  # NGINX REVERSE PROXY & LOAD BALANCER (EDGE)
-  # ==========================================
   loadbalancer:
-    image: nginx:alpine
-    container_name: pulsegrid-loadbalancer
+    image: pulsegrid-web:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     restart: unless-stopped
-    ports:
-      - '80:80'
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ../frontend/dist:/usr/share/nginx/html:ro
+    expose:
+      - '80'
     depends_on:
       - api-1
       - api-2
