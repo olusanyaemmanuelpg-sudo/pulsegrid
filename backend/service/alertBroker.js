@@ -1,3 +1,4 @@
+import nodemailer from 'nodemailer';
 import { redis } from '../config/redis.js';
 import { readQuery } from '../config/db.js';
 import { sendTelegramAlert } from './alertServices.js';
@@ -227,15 +228,65 @@ export const dispatchWebhook = async (
 /**
  * Dispatches an alert to an Email address.
  */
+let smtpTransporter = null;
+
+const getSmtpTransporter = () => {
+  if (smtpTransporter) return smtpTransporter;
+
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const port = Number(process.env.SMTP_PORT || 587);
+
+  if (!host || !user || !pass) return null;
+
+  smtpTransporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  });
+
+  return smtpTransporter;
+};
+
 export const dispatchEmail = async (email, event) => {
   if (!email || !email.includes('@')) {
     throw new Error('Valid email address is required.');
   }
 
-  // Simulated email delivery / notification logger
-  console.log(
-    `📧 [Email Notification] Alert sent to ${email} for event "${event.eventType}" on "${event.monitor?.name || 'Test'}"`,
-  );
+  const transporter =
+    process.env.NODE_ENV === 'test' ? null : getSmtpTransporter();
+
+  if (transporter) {
+    const isDown = event.eventType === 'down';
+    const isRecovery = event.eventType === 'recovery';
+    const monitorName = event.monitor?.name || 'Service';
+    const subject = isDown
+      ? `🔴 [DOWN ALERT] ${monitorName} is unreachable`
+      : isRecovery
+        ? `🟢 [RECOVERED] ${monitorName} is back online`
+        : `PulseGrid Notification: ${monitorName} (${event.eventType})`;
+
+    const text = `PulseGrid Service Alert\n\nMonitor: ${monitorName}\nEvent: ${event.eventType.toUpperCase()}\nStatus: ${isDown ? 'DOWN' : 'OPERATIONAL'}\nLatency: ${event.latency ?? 'N/A'}ms\nError: ${event.error || 'None'}\nTime: ${new Date().toISOString()}\n`;
+
+    await transporter.sendMail({
+      from: `"PulseGrid Alerts" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject,
+      text,
+    });
+
+    console.log(
+      `📧 [Email Delivered via SMTP] Alert sent to ${email} for event "${event.eventType}" on "${monitorName}"`,
+    );
+  } else {
+    // Simulated email delivery / notification logger
+    console.log(
+      `📧 [Email Notification] Alert sent to ${email} for event "${event.eventType}" on "${event.monitor?.name || 'Test'}"`,
+    );
+  }
+
   return { success: true, channel: 'email', recipient: email };
 };
 
