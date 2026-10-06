@@ -13,8 +13,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in Coolify}
       REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?Set REPLICATION_PASSWORD in Coolify}
       POSTGRES_DB: pulsegrid
-    ports:
-      - '127.0.0.1:5432:5432'
     volumes:
       - primary_data:/var/lib/postgresql/data
       - ./docker/postgres-primary:/docker-entrypoint-initdb.d:ro
@@ -42,8 +40,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in Coolify}
       POSTGRES_DB: pulsegrid
       REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?Set REPLICATION_PASSWORD in Coolify}
-    ports:
-      - '127.0.0.1:5433:5432'
     volumes:
       - replica_data:/var/lib/postgresql/data
       - ./docker/postgres-replica/01-setup-replica.sh:/usr/local/bin/replica-entrypoint.sh:ro
@@ -57,8 +53,6 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - '127.0.0.1:6380:6379'
     networks:
       - pulsegrid-net
 
