@@ -14,12 +14,24 @@ services:
       POSTGRES_DB: pulsegrid
     volumes:
       - primary_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
     networks:
       - pulsegrid-net
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 2s
     networks:
       - pulsegrid-net
 
@@ -41,18 +53,20 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN to the public HTTPS site origin in Coolify}
       RATE_LIMIT_FAIL_OPEN: 'true'
     depends_on:
-      - primary
-      - redis
+      primary:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
         - node
         - -e
         - "fetch('http://127.0.0.1:3000/api/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
-      interval: 10s
-      timeout: 5s
+      interval: 5s
+      timeout: 3s
       retries: 12
-      start_period: 30s
+      start_period: 10s
     networks:
       - pulsegrid-net
 
@@ -74,8 +88,20 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN to the public HTTPS site origin in Coolify}
       RATE_LIMIT_FAIL_OPEN: 'true'
     depends_on:
-      - primary
-      - redis
+      primary:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
     networks:
       - pulsegrid-net
 
@@ -99,9 +125,9 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
     depends_on:
       primary:
-        condition: service_started
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       api-1:
         condition: service_healthy
     networks:
@@ -127,9 +153,9 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
     depends_on:
       primary:
-        condition: service_started
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       api-1:
         condition: service_healthy
     networks:
@@ -144,8 +170,10 @@ services:
     expose:
       - '80'
     depends_on:
-      - api-1
-      - api-2
+      api-1:
+        condition: service_healthy
+      api-2:
+        condition: service_healthy
     networks:
       - pulsegrid-net
 
