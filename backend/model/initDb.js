@@ -1,4 +1,5 @@
-import { query, writePool } from '../config/db.js';
+import pg from 'pg';
+import { query, writePool, sslConfig } from '../config/db.js';
 import {
   assertMonitorTargetEncryptionKey,
   decryptMonitorTarget,
@@ -7,6 +8,62 @@ import {
   isEncryptedMonitorTarget,
 } from '../security/monitorTargetSecurity.js';
 import { getAdminEmails } from '../security/adminEmails.js';
+
+const { Pool } = pg;
+
+export const ensureDatabaseExists = async () => {
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl || process.env.NODE_ENV === 'test') return;
+
+  try {
+    const parsed = new URL(dbUrl);
+    const targetDb = parsed.pathname.replace(/^\//, '');
+    if (!targetDb || targetDb === 'postgres') return;
+
+    // Connect to default administrative 'postgres' database
+    const adminUrl = new URL(dbUrl);
+    adminUrl.pathname = '/postgres';
+
+    const adminPool = new Pool({
+      connectionString: adminUrl.toString(),
+      ssl: sslConfig,
+      connectionTimeoutMillis: 5000,
+    });
+
+    let client = null;
+    for (let attempt = 1; attempt <= 15; attempt++) {
+      try {
+        client = await adminPool.connect();
+        break;
+      } catch (err) {
+        if (attempt === 15) throw err;
+        console.log(
+          `⏳ [ensureDb] Waiting for PostgreSQL administrative connection (attempt ${attempt}/15)...`,
+        );
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+
+    try {
+      const { rows } = await client.query(
+        'SELECT 1 FROM pg_database WHERE datname = $1;',
+        [targetDb],
+      );
+      if (rows.length === 0) {
+        console.log(
+          `🔨 [ensureDb] Database "${targetDb}" does not exist. Creating...`,
+        );
+        await client.query(`CREATE DATABASE "${targetDb.replace(/"/g, '""')}";`);
+        console.log(`✅ [ensureDb] Database "${targetDb}" created successfully.`);
+      }
+    } finally {
+      client.release();
+      await adminPool.end().catch(() => {});
+    }
+  } catch (err) {
+    console.warn('⚠️ [ensureDb] Database existence check notice:', err.message);
+  }
+};
 
 const migrateMonitorTargets = async () => {
   assertMonitorTargetEncryptionKey();
@@ -139,6 +196,8 @@ export const initDb = async () => {
     );
     CREATE INDEX IF NOT EXISTS idx_system_incidents_created ON system_incidents (created_at DESC);
   `;
+
+  await ensureDatabaseExists();
 
   let client;
   for (let attempt = 1; attempt <= 15; attempt++) {

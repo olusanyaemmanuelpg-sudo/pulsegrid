@@ -51,7 +51,7 @@ const isLocalOrDockerDb =
   process.env.DATABASE_URL?.includes('@localhost:') ||
   process.env.DATABASE_URL?.includes('@127.0.0.1:');
 
-const sslConfig =
+export const sslConfig =
   process.env.DB_SSL === 'true' ||
   (isProduction && process.env.DB_SSL !== 'false' && !isLocalOrDockerDb)
     ? { rejectUnauthorized: false }
