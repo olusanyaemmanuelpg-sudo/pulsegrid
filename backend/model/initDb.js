@@ -230,7 +230,13 @@ export const initDb = async () => {
       'ALTER TABLE monitors ADD COLUMN IF NOT EXISTS target_fingerprint TEXT;',
     );
     await client.query(
-      'ALTER TABLE monitors ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE;',
+      'ALTER TABLE monitors ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE;',
+    );
+    await client.query(
+      'ALTER TABLE monitors ALTER COLUMN is_public SET DEFAULT FALSE;',
+    );
+    await client.query(
+      'UPDATE monitors SET is_public = FALSE WHERE is_public IS TRUE OR is_public IS NULL;',
     );
     await client.query(addHeartbeatSecretColumnSQL);
     await client.query(backfillHeartbeatSecretsSQL);

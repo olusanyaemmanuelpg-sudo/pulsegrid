@@ -34,8 +34,8 @@ export const StatusPage = () => {
     setRefreshing(false);
   };
 
-  // Determine active services to display
-  const displayServices = publicMonitors.length > 0 ? publicMonitors : monitors;
+  // Determine active services to display (PulseGrid core platform services; user monitors remain private)
+  const displayServices = publicMonitors;
 
   const effectiveStatus = systemStatus?.effectiveStatus || 'operational';
   const announcement = systemStatus?.announcement || {};
