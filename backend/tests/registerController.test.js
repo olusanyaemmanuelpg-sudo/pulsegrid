@@ -68,3 +68,36 @@ test('handleRegister stores the user with matching column/value counts', async (
   assert.equal(res.payload.token, 'test-token');
   assert.equal(res.payload.user.role, 'developer');
 });
+
+test('handleRegister ignores Express next callback passed as 3rd parameter', async () => {
+  let nextCalled = false;
+  const next = (err) => {
+    nextCalled = true;
+  };
+
+  const req = {
+    body: {
+      name: '',
+      email: '',
+      password: '',
+    },
+  };
+
+  const res = {
+    statusCode: null,
+    payload: null,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(data) {
+      this.payload = data;
+      return this;
+    },
+  };
+
+  await handleRegister(req, res, next);
+  assert.equal(nextCalled, false);
+  assert.equal(res.statusCode, 400);
+});
+

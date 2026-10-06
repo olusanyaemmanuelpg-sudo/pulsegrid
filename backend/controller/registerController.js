@@ -10,6 +10,11 @@ export const handleRegister = async (
   hashFn = bcrypt.hash,
   signFn = jwt.sign,
 ) => {
+  const actualQuery =
+    typeof queryFn === 'function' && queryFn.name !== 'next' ? queryFn : query;
+  const actualHash = typeof hashFn === 'function' ? hashFn : bcrypt.hash;
+  const actualSign = typeof signFn === 'function' ? signFn : jwt.sign;
+
   const { name, email, password } = req.body;
 
   if (!name || !email || !password) {
@@ -26,7 +31,7 @@ export const handleRegister = async (
   const normalizedEmail = email.toLowerCase().trim();
 
   try {
-    const { rows } = await queryFn('SELECT * FROM users WHERE email = $1', [
+    const { rows } = await actualQuery('SELECT * FROM users WHERE email = $1', [
       normalizedEmail,
     ]);
     if (rows.length > 0) {
@@ -35,16 +40,16 @@ export const handleRegister = async (
       });
     }
 
-    const hashedPassword = await hashFn(password, 10);
+    const hashedPassword = await actualHash(password, 10);
     const role = isAdminEmail(normalizedEmail) ? 'admin' : 'developer';
-    const { rows: insertedRows } = await queryFn(
+    const { rows: insertedRows } = await actualQuery(
       `INSERT INTO users (name, email, password_hash, role)
        VALUES ($1, $2, $3, $4)
        RETURNING id, name, email, role, created_at`,
       [name, normalizedEmail, hashedPassword, role],
     );
     const user = insertedRows[0];
-    const token = signFn(
+    const token = actualSign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '7d' },

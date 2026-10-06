@@ -3,6 +3,6 @@ import { handleRegister } from '../controller/registerController.js';
 
 const router = Router();
 
-router.post('/', handleRegister);
+router.post('/', (req, res) => handleRegister(req, res));
 
 export default router;
