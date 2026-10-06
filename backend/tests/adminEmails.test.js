@@ -20,12 +20,16 @@ test('admin email allowlist defaults to the configured account in local dev', ()
 
 test('production mode does not silently grant a hardcoded admin fallback', () => {
   const previousNodeEnv = process.env.NODE_ENV;
+  const previousAdminEmails = process.env.ADMIN_EMAILS;
   process.env.NODE_ENV = 'production';
+  delete process.env.ADMIN_EMAILS;
 
   try {
     assert.deepEqual(getAdminEmails(), []);
     assert.equal(isAdminEmail('olusanyaemmanuelpg@gmail.com'), false);
   } finally {
+    if (previousAdminEmails === undefined) delete process.env.ADMIN_EMAILS;
+    else process.env.ADMIN_EMAILS = previousAdminEmails;
     process.env.NODE_ENV = previousNodeEnv;
   }
 });

@@ -30,7 +30,7 @@ const requireAuth = (req, res, next) => {
         ? 'Authentication is not configured.'
         : 'Access denied: Invalid or expired token.';
 
-    return res
+    res
       .status(
         error instanceof Error && error.message.includes('JWT_SECRET')
           ? 500
@@ -39,6 +39,7 @@ const requireAuth = (req, res, next) => {
       .json({
         message,
       });
+    return;
   }
 };
 

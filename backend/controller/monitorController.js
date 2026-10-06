@@ -38,6 +38,69 @@ const sanitizeCheckErrors = (checks) =>
     error: check.error ? sanitizeProbeError(new Error(check.error)) : null,
   }));
 
+const resolveMonitorRecentChecks = async (monitor, rawChecks, err) => {
+  const monitorCreatedTime = monitor.created_at
+    ? new Date(monitor.created_at).getTime()
+    : 0;
+
+  let validChecks = [];
+  let hadStaleGhostChecks = false;
+
+  if (!err && Array.isArray(rawChecks) && rawChecks.length > 0) {
+    const parsed = rawChecks
+      .map((r) => {
+        try {
+          return JSON.parse(r);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+
+    validChecks = parsed.filter((c) => {
+      const checkTime = c.created_at ? new Date(c.created_at).getTime() : 0;
+      return checkTime >= monitorCreatedTime - 5000;
+    });
+
+    if (validChecks.length !== parsed.length) {
+      hadStaleGhostChecks = true;
+    }
+  }
+
+  // If Redis was empty OR contained stale ghost checks from an older deleted monitor, fetch from PostgreSQL
+  if (validChecks.length === 0 || hadStaleGhostChecks) {
+    const { rows: dbChecks } = await readQuery(
+      `SELECT id, status, latency_ms, error, created_at
+       FROM monitor_checks
+       WHERE monitor_id = $1
+       ORDER BY created_at DESC
+       LIMIT 30;`,
+      [monitor.id],
+    );
+
+    // Rehydrate/reconcile Redis hot tier: clear old ghost data and re-populate with genuine DB records
+    if (hadStaleGhostChecks || (validChecks.length === 0 && dbChecks.length > 0)) {
+      void (async () => {
+        try {
+          await redis.del(`monitor:${monitor.id}:checks`);
+          if (dbChecks.length > 0) {
+            const fillPipe = redis.pipeline();
+            for (const c of dbChecks) {
+              fillPipe.rpush(`monitor:${monitor.id}:checks`, JSON.stringify(c));
+            }
+            fillPipe.ltrim(`monitor:${monitor.id}:checks`, 0, 29);
+            await fillPipe.exec();
+          }
+        } catch {}
+      })();
+    }
+
+    return sanitizeCheckErrors(dbChecks.reverse());
+  }
+
+  return sanitizeCheckErrors(validChecks.reverse());
+};
+
 export const createMonitor = async (req, res) => {
   const { name, type, target, interval, keyword } = req.body ?? {};
 
@@ -106,8 +169,15 @@ export const createMonitor = async (req, res) => {
       ],
     );
 
+    const createdRow = rows[0];
+
+    // Purge any recycled/stale Redis keys for this monitor ID
+    await redis
+      .del(`monitor:${createdRow.id}`, `monitor:${createdRow.id}:checks`)
+      .catch(() => {});
+
     const created = toClientMonitor({
-      ...rows[0],
+      ...createdRow,
       recent_checks: [],
     });
 
@@ -145,47 +215,11 @@ export const getMonitors = async (req, res) => {
     rows.forEach((m) => pipeline.lrange(`monitor:${m.id}:checks`, 0, 29));
     const redisResults = await pipeline.exec();
 
-    // 2. Cache-Aside mapping with PostgreSQL cold fallback
+    // 2. Cache-Aside mapping with stale ghost check filtering & PostgreSQL cold fallback
     const monitorsWithChecks = await Promise.all(
       rows.map(async (monitor, idx) => {
         const [err, rawChecks] = redisResults?.[idx] || [];
-        let checks = [];
-
-        if (!err && Array.isArray(rawChecks) && rawChecks.length > 0) {
-          checks = rawChecks
-            .map((r) => {
-              try {
-                return JSON.parse(r);
-              } catch {
-                return null;
-              }
-            })
-            .filter(Boolean)
-            .reverse();
-          checks = sanitizeCheckErrors(checks);
-        } else {
-          // Cold-start fallback from PostgreSQL
-          const { rows: dbChecks } = await readQuery(
-            `SELECT id, status, latency_ms, error, created_at
-             FROM monitor_checks
-             WHERE monitor_id = $1
-             ORDER BY created_at DESC
-             LIMIT 30;`,
-            [monitor.id],
-          );
-
-          if (dbChecks.length > 0) {
-            // Rehydrate Redis hot tier asynchronously
-            const fillPipe = redis.pipeline();
-            for (const c of dbChecks) {
-              fillPipe.rpush(`monitor:${monitor.id}:checks`, JSON.stringify(c));
-            }
-            fillPipe.ltrim(`monitor:${monitor.id}:checks`, 0, 29);
-            void fillPipe.exec().catch(() => {});
-          }
-
-          checks = sanitizeCheckErrors(dbChecks.reverse());
-        }
+        const checks = await resolveMonitorRecentChecks(monitor, rawChecks, err);
 
         return toClientMonitor({
           ...monitor,
@@ -214,6 +248,11 @@ export const deleteMonitor = async (req, res) => {
     );
     if (rows.length === 0)
       return res.status(404).json({ message: 'Monitor not found.' });
+
+    // Purge monitor state and check ring buffer from Redis
+    await redis
+      .del(`monitor:${id}`, `monitor:${id}:checks`)
+      .catch(() => {});
 
     return res.status(200).json({ message: 'Monitor deleted successfully.' });
   } catch (error) {
@@ -433,41 +472,7 @@ export const getPublicStatus = async (req, res) => {
     const publicMonitors = await Promise.all(
       rows.map(async (mon, idx) => {
         const [err, rawChecks] = redisResults?.[idx] || [];
-        let checks = [];
-
-        if (!err && Array.isArray(rawChecks) && rawChecks.length > 0) {
-          checks = rawChecks
-            .map((r) => {
-              try {
-                return JSON.parse(r);
-              } catch {
-                return null;
-              }
-            })
-            .filter(Boolean)
-            .reverse();
-          checks = sanitizeCheckErrors(checks);
-        } else {
-          const { rows: dbChecks } = await readQuery(
-            `SELECT id, status, latency_ms, error, created_at
-             FROM monitor_checks
-             WHERE monitor_id = $1
-             ORDER BY created_at DESC
-             LIMIT 30;`,
-            [mon.id],
-          );
-
-          if (dbChecks.length > 0) {
-            const fillPipe = redis.pipeline();
-            for (const c of dbChecks) {
-              fillPipe.rpush(`monitor:${mon.id}:checks`, JSON.stringify(c));
-            }
-            fillPipe.ltrim(`monitor:${mon.id}:checks`, 0, 29);
-            void fillPipe.exec().catch(() => {});
-          }
-
-          checks = sanitizeCheckErrors(dbChecks.reverse());
-        }
+        const checks = await resolveMonitorRecentChecks(mon, rawChecks, err);
 
         return {
           ...mon,

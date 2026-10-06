@@ -57,13 +57,13 @@ export const MonitorCard = ({ monitor }) => {
 
   const isUp = monitor.status === 'up';
 
-  // Calculate real 30-slot check timeline (starts from left, fills towards right)
+  // Calculate real 30-slot check timeline (empty past slots on left, newest checks on right)
   const recentChecks = monitor.recentChecks || [];
   const totalSlots = 30;
   const emptyCount = Math.max(0, totalSlots - recentChecks.length);
   const slots = [
-    ...recentChecks.map((c) => ({ type: 'check', ...c })),
     ...Array(emptyCount).fill({ type: 'empty' }),
+    ...recentChecks.map((c) => ({ type: 'check', ...c })),
   ];
 
   const checkCount = recentChecks.length;

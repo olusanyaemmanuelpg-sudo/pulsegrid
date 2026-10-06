@@ -6,7 +6,7 @@ import * as jwtMod from 'jsonwebtoken';
 import { handleRegister } from '../controller/registerController.js';
 
 test('handleRegister stores the user with matching column/value counts', async () => {
-  mock.method(db, 'query', async (sql, params) => {
+  const mockQuery = async (sql, params) => {
     if (sql.includes('SELECT * FROM users WHERE email = $1')) {
       return { rows: [] };
     }
@@ -36,10 +36,10 @@ test('handleRegister stores the user with matching column/value counts', async (
     }
 
     throw new Error(`Unexpected SQL: ${sql}`);
-  });
+  };
 
-  mock.method(bcryptMod, 'hash', async () => 'hashed-password');
-  mock.method(jwtMod, 'sign', () => 'test-token');
+  const mockHash = async () => 'hashed-password';
+  const mockSign = () => 'test-token';
 
   const req = {
     body: {
@@ -62,7 +62,7 @@ test('handleRegister stores the user with matching column/value counts', async (
     },
   };
 
-  await handleRegister(req, res);
+  await handleRegister(req, res, mockQuery, mockHash, mockSign);
 
   assert.equal(res.statusCode, 201);
   assert.equal(res.payload.token, 'test-token');

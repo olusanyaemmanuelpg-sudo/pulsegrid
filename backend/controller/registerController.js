@@ -3,7 +3,13 @@ import jwt from 'jsonwebtoken';
 import { query } from '../config/db.js';
 import { isAdminEmail } from '../security/adminEmails.js';
 
-export const handleRegister = async (req, res) => {
+export const handleRegister = async (
+  req,
+  res,
+  queryFn = query,
+  hashFn = bcrypt.hash,
+  signFn = jwt.sign,
+) => {
   const { name, email, password } = req.body;
 
   if (!name || !email || !password) {
@@ -20,7 +26,7 @@ export const handleRegister = async (req, res) => {
   const normalizedEmail = email.toLowerCase().trim();
 
   try {
-    const { rows } = await query('SELECT * FROM users WHERE email = $1', [
+    const { rows } = await queryFn('SELECT * FROM users WHERE email = $1', [
       normalizedEmail,
     ]);
     if (rows.length > 0) {
@@ -29,16 +35,16 @@ export const handleRegister = async (req, res) => {
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await hashFn(password, 10);
     const role = isAdminEmail(normalizedEmail) ? 'admin' : 'developer';
-    const { rows: insertedRows } = await query(
+    const { rows: insertedRows } = await queryFn(
       `INSERT INTO users (name, email, password_hash, role)
        VALUES ($1, $2, $3, $4)
        RETURNING id, name, email, role, created_at`,
       [name, normalizedEmail, hashedPassword, role],
     );
     const user = insertedRows[0];
-    const token = jwt.sign(
+    const token = signFn(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '7d' },

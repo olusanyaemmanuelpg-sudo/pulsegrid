@@ -376,7 +376,9 @@ export const adminDeleteMonitor = async (req, res) => {
       return res.status(404).json({ message: 'Monitor not found.' });
     }
 
-    await redis.del(`monitor:${monitorId}:checks`).catch(() => {});
+    await redis
+      .del(`monitor:${monitorId}`, `monitor:${monitorId}:checks`)
+      .catch(() => {});
 
     return res.status(200).json({ message: 'Service removed from platform.' });
   } catch (error) {

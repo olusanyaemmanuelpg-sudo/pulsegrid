@@ -302,8 +302,8 @@ export const StatusPage = () => {
                       const recentChecks = mon.recentChecks || [];
                       const emptyCount = Math.max(0, 30 - recentChecks.length);
                       const slots = [
-                        ...recentChecks.map((c) => ({ type: 'check', ...c })),
                         ...Array(emptyCount).fill({ type: 'empty' }),
+                        ...recentChecks.map((c) => ({ type: 'check', ...c })),
                       ];
                       return slots.map((slot, idx) => {
                         if (slot.type === 'empty') {
