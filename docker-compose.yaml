@@ -15,7 +15,7 @@ services:
       POSTGRES_DB: pulsegrid
     volumes:
       - primary_data:/var/lib/postgresql/data
-      - ./postgres-primary:/docker-entrypoint-initdb.d:ro
+      - ./docker/postgres-primary:/docker-entrypoint-initdb.d:ro
     command:
       - postgres
       - -c
@@ -39,7 +39,7 @@ services:
       REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?Set REPLICATION_PASSWORD in Coolify}
     volumes:
       - replica_data:/var/lib/postgresql/data
-      - ./postgres-replica/01-setup-replica.sh:/usr/local/bin/replica-entrypoint.sh:ro
+      - ./docker/postgres-replica/01-setup-replica.sh:/usr/local/bin/replica-entrypoint.sh:ro
     entrypoint: ['/bin/bash', '/usr/local/bin/replica-entrypoint.sh']
     command: ['postgres']
     depends_on:
@@ -74,6 +74,16 @@ services:
       - primary
       - replica
       - redis
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     networks:
       - pulsegrid-net
 
@@ -120,8 +130,12 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
     depends_on:
-      - primary
-      - redis
+      primary:
+        condition: service_started
+      redis:
+        condition: service_started
+      api-1:
+        condition: service_healthy
     networks:
       - pulsegrid-net
 
@@ -144,8 +158,12 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
     depends_on:
-      - primary
-      - redis
+      primary:
+        condition: service_started
+      redis:
+        condition: service_started
+      api-1:
+        condition: service_healthy
     networks:
       - pulsegrid-net
 
