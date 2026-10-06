@@ -140,7 +140,20 @@ export const initDb = async () => {
     CREATE INDEX IF NOT EXISTS idx_system_incidents_created ON system_incidents (created_at DESC);
   `;
 
-  const client = await writePool.connect();
+  let client;
+  for (let attempt = 1; attempt <= 15; attempt++) {
+    try {
+      client = await writePool.connect();
+      break;
+    } catch (err) {
+      if (attempt === 15) {
+        console.error('❌ Could not connect to PostgreSQL after 15 attempts:', err.message);
+        throw err;
+      }
+      console.log(`⏳ [initDb] Waiting for PostgreSQL database (attempt ${attempt}/15, error: ${err.message}). Retrying in 2s...`);
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  }
   const ADVISORY_LOCK_ID = 987654321;
 
   try {

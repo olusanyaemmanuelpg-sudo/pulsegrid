@@ -64,7 +64,16 @@ process.on('SIGINT', () => handleShutdown('SIGINT'));
 
 const bootWorker = async () => {
   try {
-    await query('SELECT 1');
+    for (let attempt = 1; attempt <= 15; attempt++) {
+      try {
+        await query('SELECT 1');
+        break;
+      } catch (err) {
+        if (attempt === 15) throw err;
+        console.log(`⏳ [${MY_WORKER_ID}] Waiting for PostgreSQL database (attempt ${attempt}/15)...`);
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
     console.log(`✅ [${MY_WORKER_ID}] Database connection established.`);
 
     // 1. Join Consistent Hash Ring via periodic Redis heartbeat
