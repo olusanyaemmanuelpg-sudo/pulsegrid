@@ -11,39 +11,9 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in Coolify}
-      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?Set REPLICATION_PASSWORD in Coolify}
       POSTGRES_DB: pulsegrid
     volumes:
       - primary_data:/var/lib/postgresql/data
-      - ./docker/postgres-primary:/docker-entrypoint-initdb.d:ro
-    command:
-      - postgres
-      - -c
-      - wal_level=replica
-      - -c
-      - max_wal_senders=10
-      - -c
-      - max_replication_slots=10
-      - -c
-      - wal_keep_size=1GB
-    networks:
-      - pulsegrid-net
-
-  replica:
-    image: postgres:15
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in Coolify}
-      POSTGRES_DB: pulsegrid
-      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?Set REPLICATION_PASSWORD in Coolify}
-    volumes:
-      - replica_data:/var/lib/postgresql/data
-      - ./docker/postgres-replica/01-setup-replica.sh:/usr/local/bin/replica-entrypoint.sh:ro
-    entrypoint: ['/bin/bash', '/usr/local/bin/replica-entrypoint.sh']
-    command: ['postgres']
-    depends_on:
-      - primary
     networks:
       - pulsegrid-net
 
@@ -63,7 +33,7 @@ services:
       NODE_ENV: production
       DB_SSL: 'false'
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
-      DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@replica:5432/pulsegrid
+      DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Coolify}
       MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY:?Set MONITOR_TARGET_ENCRYPTION_KEY in Coolify}
@@ -72,7 +42,6 @@ services:
       RATE_LIMIT_FAIL_OPEN: 'true'
     depends_on:
       - primary
-      - replica
       - redis
     healthcheck:
       test:
@@ -97,7 +66,7 @@ services:
       NODE_ENV: production
       DB_SSL: 'false'
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
-      DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@replica:5432/pulsegrid
+      DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in Coolify}
       MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY:?Set MONITOR_TARGET_ENCRYPTION_KEY in Coolify}
@@ -106,7 +75,6 @@ services:
       RATE_LIMIT_FAIL_OPEN: 'true'
     depends_on:
       - primary
-      - replica
       - redis
     networks:
       - pulsegrid-net
@@ -120,7 +88,7 @@ services:
       NODE_ENV: production
       DB_SSL: 'false'
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
-      DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@replica:5432/pulsegrid
+      DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
       REDIS_URL: redis://redis:6379
       MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY:?Set MONITOR_TARGET_ENCRYPTION_KEY in Coolify}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
@@ -148,7 +116,7 @@ services:
       NODE_ENV: production
       DB_SSL: 'false'
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
-      DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@replica:5432/pulsegrid
+      DATABASE_READ_URL: postgresql://postgres:${POSTGRES_PASSWORD}@primary:5432/pulsegrid
       REDIS_URL: redis://redis:6379
       MONITOR_TARGET_ENCRYPTION_KEY: ${MONITOR_TARGET_ENCRYPTION_KEY:?Set MONITOR_TARGET_ENCRYPTION_KEY in Coolify}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
@@ -183,8 +151,6 @@ services:
 
 volumes:
   primary_data:
-  replica_data:
-    name: pulsegrid_replica_data_v2
 
 networks:
   pulsegrid-net:
