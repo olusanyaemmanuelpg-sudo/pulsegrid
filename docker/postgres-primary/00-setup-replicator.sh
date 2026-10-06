@@ -7,3 +7,7 @@ psql \
   --dbname postgres <<'SQL'
 CREATE ROLE replicator WITH REPLICATION LOGIN PASSWORD :'replication_password';
 SQL
+
+# Automatically allow streaming replication from replica container
+echo "host replication replicator all scram-sha-256" >> "$PGDATA/pg_hba.conf"
+echo "host all all all scram-sha-256" >> "$PGDATA/pg_hba.conf"

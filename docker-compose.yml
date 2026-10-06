@@ -15,8 +15,7 @@ services:
       POSTGRES_DB: pulsegrid
     volumes:
       - primary_data:/var/lib/postgresql/data
-      - ./docker/postgres-primary:/docker-entrypoint-initdb.d:ro
-      - ./docker/postgres-primary/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./postgres-primary:/docker-entrypoint-initdb.d:ro
     command:
       - postgres
       - -c
@@ -27,8 +26,6 @@ services:
       - max_replication_slots=10
       - -c
       - wal_keep_size=1GB
-      - -c
-      - hba_file=/etc/postgresql/pg_hba.conf
     networks:
       - pulsegrid-net
 
@@ -42,7 +39,7 @@ services:
       REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?Set REPLICATION_PASSWORD in Coolify}
     volumes:
       - replica_data:/var/lib/postgresql/data
-      - ./docker/postgres-replica/01-setup-replica.sh:/usr/local/bin/replica-entrypoint.sh:ro
+      - ./postgres-replica/01-setup-replica.sh:/usr/local/bin/replica-entrypoint.sh:ro
     entrypoint: ['/bin/bash', '/usr/local/bin/replica-entrypoint.sh']
     command: ['postgres']
     depends_on:
