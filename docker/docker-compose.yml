@@ -1,7 +1,7 @@
 x-backend: &backend
   image: pulsegrid-backend:latest
   build:
-    context: ../backend
+    context: ./backend
     dockerfile: Dockerfile
 
 services:
@@ -17,8 +17,8 @@ services:
       - '127.0.0.1:5432:5432'
     volumes:
       - primary_data:/var/lib/postgresql/data
-      - ./postgres-primary:/docker-entrypoint-initdb.d:ro
-      - ./postgres-primary/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./docker/postgres-primary:/docker-entrypoint-initdb.d:ro
+      - ./docker/postgres-primary/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
     command:
       - postgres
       - -c
@@ -46,7 +46,7 @@ services:
       - '127.0.0.1:5433:5432'
     volumes:
       - replica_data:/var/lib/postgresql/data
-      - ./postgres-replica/01-setup-replica.sh:/usr/local/bin/replica-entrypoint.sh:ro
+      - ./docker/postgres-replica/01-setup-replica.sh:/usr/local/bin/replica-entrypoint.sh:ro
     entrypoint: ['/bin/bash', '/usr/local/bin/replica-entrypoint.sh']
     command: ['postgres']
     depends_on:
@@ -161,7 +161,7 @@ services:
   loadbalancer:
     image: pulsegrid-web:latest
     build:
-      context: ..
+      context: .
       dockerfile: docker/Dockerfile
     restart: unless-stopped
     expose:
