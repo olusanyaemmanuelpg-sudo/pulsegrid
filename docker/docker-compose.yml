@@ -52,6 +52,12 @@ services:
       ADMIN_EMAILS: ${ADMIN_EMAILS:?Set ADMIN_EMAILS in Coolify}
       CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN to the public HTTPS site origin in Coolify}
       RATE_LIMIT_FAIL_OPEN: 'true'
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
     depends_on:
       primary:
         condition: service_healthy
@@ -87,6 +93,12 @@ services:
       ADMIN_EMAILS: ${ADMIN_EMAILS:?Set ADMIN_EMAILS in Coolify}
       CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN to the public HTTPS site origin in Coolify}
       RATE_LIMIT_FAIL_OPEN: 'true'
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
     depends_on:
       primary:
         condition: service_healthy

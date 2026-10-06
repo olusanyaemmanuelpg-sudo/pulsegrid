@@ -22,7 +22,9 @@ test('monitor targets encrypt with authenticated encryption and round-trip', () 
 
 test('tampered monitor target ciphertext is rejected', () => {
   const encrypted = encryptMonitorTarget('redis://probe:secret@example.com');
-  const tampered = `${encrypted.slice(0, -1)}${encrypted.endsWith('A') ? 'B' : 'A'}`;
+  const parts = encrypted.split(':');
+  parts[3] = `${parts[3][0] === 'a' ? 'b' : 'a'}${parts[3].slice(1)}`;
+  const tampered = parts.join(':');
 
   assert.throws(() => decryptMonitorTarget(tampered));
 });
