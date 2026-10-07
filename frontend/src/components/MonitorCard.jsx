@@ -9,17 +9,38 @@ import {
   AlertTriangle,
 } from './Icons';
 import { useMonitors } from '../context/MonitorContext';
+import { useAuth } from '../context/AuthContext';
 
-const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV ? 'http://localhost:3000' : '')
-).replace(/\/+$/, '');
+const getPublicApiBaseUrl = () => {
+  const configured = (
+    import.meta.env.VITE_API_BASE_URL ||
+    import.meta.env.VITE_API_URL ||
+    ''
+  ).replace(/\/+$/, '');
+
+  if (configured && /^https?:\/\//i.test(configured)) {
+    return configured;
+  }
+
+  if (import.meta.env.DEV) {
+    return 'http://localhost:3000';
+  }
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+
+  return 'http://localhost:3000';
+};
 
 export const MonitorCard = ({ monitor }) => {
-  const { deleteMonitor, testMonitor } = useMonitors();
+  const { user } = useAuth();
+  const { deleteMonitor, testMonitor, toggleVisibility } = useMonitors();
   const [testing, setTesting] = useState(false);
+  const [togglingVisibility, setTogglingVisibility] = useState(false);
   const [copiedHeartbeat, setCopiedHeartbeat] = useState(false);
+
+  const isPublic = Boolean(monitor.is_public ?? monitor.isPublic);
 
   const handleTest = async () => {
     setTesting(true);
@@ -30,12 +51,32 @@ export const MonitorCard = ({ monitor }) => {
     }
   };
 
-  const handleCopyHeartbeat = () => {
-    const heartbeatToken = monitor.heartbeat_secret;
-    const command = heartbeatToken
-      ? `curl -fsS "${API_BASE_URL}/api/heartbeat/${monitor.id}?token=${heartbeatToken}"`
-      : `curl -fsS ${API_BASE_URL}/api/heartbeat/${monitor.id}`;
+  const handleToggleVisibility = async () => {
+    if (togglingVisibility || !toggleVisibility) return;
+    setTogglingVisibility(true);
+    try {
+      await toggleVisibility(monitor.id, !isPublic);
+    } catch (err) {
+      console.error('Failed to toggle visibility:', err.message);
+    } finally {
+      setTogglingVisibility(false);
+    }
+  };
 
+  const getHeartbeatUrl = () => {
+    const base = getPublicApiBaseUrl();
+    const token = monitor.heartbeat_secret;
+    return token
+      ? `${base}/api/heartbeat/${monitor.id}?token=${token}`
+      : `${base}/api/heartbeat/${monitor.id}`;
+  };
+
+  const getHeartbeatCommand = () => {
+    return `curl -fsS "${getHeartbeatUrl()}"`;
+  };
+
+  const handleCopyHeartbeat = () => {
+    const command = getHeartbeatCommand();
     navigator.clipboard.writeText(command);
     setCopiedHeartbeat(true);
     setTimeout(() => setCopiedHeartbeat(false), 2000);
@@ -88,9 +129,51 @@ export const MonitorCard = ({ monitor }) => {
                 <span className="dot-indicator"></span>
                 {isUp ? 'Operational' : 'Down'}
               </span>
+              {user?.role === 'admin' && (
+                <button
+                  type="button"
+                  className="btn-status-toggle"
+                  onClick={handleToggleVisibility}
+                  disabled={togglingVisibility}
+                  title={
+                    isPublic
+                      ? 'Published on Public Status Page (Click to make private)'
+                      : 'Private to workspace (Click to publish on status page)'
+                  }
+                  style={{
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    padding: '2px 8px',
+                    borderRadius: '999px',
+                    border: isPublic
+                      ? '1px solid rgba(16, 185, 129, 0.4)'
+                      : '1px solid rgba(255, 255, 255, 0.12)',
+                    background: isPublic
+                      ? 'rgba(16, 185, 129, 0.15)'
+                      : 'rgba(255, 255, 255, 0.05)',
+                    color: isPublic ? '#10b981' : 'var(--text-muted, #a1a1aa)',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {togglingVisibility
+                    ? '...'
+                    : isPublic
+                      ? '🌐 Public'
+                      : '🔒 Private'}
+                </button>
+              )}
             </div>
-            <p className="card-target" title={monitor.target}>
-              {monitor.target}
+            <p
+              className="card-target"
+              title={
+                monitor.type === 'cron' ? 'Heartbeat monitor' : monitor.target
+              }
+            >
+              {monitor.type === 'cron' ? 'Heartbeat monitor' : monitor.target}
             </p>
           </div>
         </div>
@@ -198,11 +281,7 @@ export const MonitorCard = ({ monitor }) => {
         <div className="card-cron-snippet">
           <span className="cron-snippet-label">Heartbeat Ping URL:</span>
           <div className="cron-snippet-cmd">
-            <code>
-              {monitor.heartbeat_secret
-                ? `curl -fsS "${API_BASE_URL}/api/heartbeat/${monitor.id}?token=${monitor.heartbeat_secret}"`
-                : `curl -fsS ${API_BASE_URL}/api/heartbeat/${monitor.id}`}
-            </code>
+            <code>{getHeartbeatCommand()}</code>
             <button
               type="button"
               className="btn-copy-mini"

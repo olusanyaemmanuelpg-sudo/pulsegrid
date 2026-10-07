@@ -236,7 +236,7 @@ export const initDb = async () => {
       'ALTER TABLE monitors ALTER COLUMN is_public SET DEFAULT FALSE;',
     );
     await client.query(
-      'UPDATE monitors SET is_public = FALSE WHERE is_public IS TRUE OR is_public IS NULL;',
+      'UPDATE monitors SET is_public = FALSE WHERE is_public IS NULL;',
     );
     await client.query(addHeartbeatSecretColumnSQL);
     await client.query(backfillHeartbeatSecretsSQL);

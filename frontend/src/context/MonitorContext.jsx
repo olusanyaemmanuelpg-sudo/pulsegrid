@@ -180,6 +180,9 @@ export const MonitorProvider = ({ children }) => {
 
     const created = normalizeMonitor(data.monitor);
     setMonitors((prev) => [created, ...prev]);
+    if (created.is_public || created.isPublic) {
+      void fetchPublicStatus();
+    }
     return created;
   };
 
@@ -255,6 +258,39 @@ export const MonitorProvider = ({ children }) => {
       (activeLatencies.length || 1),
   );
 
+  // Toggle Monitor Visibility on Public Status Page (Admin only)
+  const toggleVisibility = async (id, isPublic) => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/monitors/${id}/visibility`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ isPublic }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update monitor visibility.');
+      }
+
+      setMonitors((prev) =>
+        prev.map((m) =>
+          m.id === id ? { ...m, is_public: isPublic, isPublic } : m,
+        ),
+      );
+
+      void fetchPublicStatus();
+      return data;
+    } catch (err) {
+      console.error('Toggle monitor visibility error:', err.message);
+      throw err;
+    }
+  };
+
   return (
     <MonitorContext.Provider
       value={{
@@ -269,6 +305,7 @@ export const MonitorProvider = ({ children }) => {
         addMonitor,
         deleteMonitor,
         testMonitor,
+        toggleVisibility,
         metrics: {
           total: totalMonitors,
           up: upMonitors,

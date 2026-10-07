@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { Globe, Database, Server, Clock, Shield, Check, Copy } from './Icons';
 import { useMonitors } from '../context/MonitorContext';
+import { useAuth } from '../context/AuthContext';
 
 export const AddMonitorModal = ({ isOpen, onClose }) => {
+  const { user } = useAuth();
   const { addMonitor } = useMonitors();
   const [monitorType, setMonitorType] = useState('http');
   const [name, setName] = useState('');
   const [target, setTarget] = useState('');
   const [interval, setInterval] = useState(30);
   const [keyword, setKeyword] = useState('');
+  const [isPublic, setIsPublic] = useState(false);
   const [formError, setFormError] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -33,12 +36,14 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
         target: finalTarget.trim(),
         interval: Number(interval),
         keyword: keyword.trim() || undefined,
+        isPublic: user?.role === 'admin' ? isPublic : false,
       });
 
       // Reset form on success
       setName('');
       setTarget('');
       setKeyword('');
+      setIsPublic(false);
       setFormError('');
       onClose();
     } catch (err) {
@@ -252,6 +257,44 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
               )}
             </select>
           </div>
+
+          {/* Admin Showcase on Status Page option */}
+          {user?.role === 'admin' && (
+            <div
+              className="form-group"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '0.6rem 0.8rem',
+                borderRadius: '8px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                marginTop: '0.5rem',
+              }}
+            >
+              <input
+                type="checkbox"
+                id="isPublicMonitor"
+                checked={isPublic}
+                onChange={(e) => setIsPublic(e.target.checked)}
+                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+              />
+              <label
+                htmlFor="isPublicMonitor"
+                style={{
+                  fontSize: '0.85rem',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  margin: 0,
+                  userSelect: 'none',
+                  color: isPublic ? '#10b981' : 'var(--text-secondary, #d4d4d8)',
+                }}
+              >
+                🌐 Publish on Public Status Page (Showcase this service)
+              </label>
+            </div>
+          )}
 
           {/* Footer Actions */}
           <div className="modal-footer">
