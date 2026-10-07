@@ -1482,6 +1482,72 @@
   border-color: var(--accent-green);
 }
 
+.public-monitor-option {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 0.5rem;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--bg-card);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.public-monitor-option:hover,
+.public-monitor-option.is-selected {
+  border-color: color-mix(
+    in srgb,
+    var(--accent-green) 45%,
+    var(--border-color)
+  );
+  background-color: var(--accent-green-bg);
+}
+
+.public-monitor-option:focus-within {
+  outline: 3px solid color-mix(in srgb, var(--accent-green) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.public-monitor-checkbox {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent-green);
+  cursor: pointer;
+}
+
+.public-monitor-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.public-monitor-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-main);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.public-monitor-title svg {
+  flex: 0 0 auto;
+  color: var(--accent-green);
+}
+
+.public-monitor-description {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
 .security-note {
   display: flex;
   align-items: center;

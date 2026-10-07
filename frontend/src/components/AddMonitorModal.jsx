@@ -260,40 +260,30 @@ export const AddMonitorModal = ({ isOpen, onClose }) => {
 
           {/* Admin Showcase on Status Page option */}
           {user?.role === 'admin' && (
-            <div
-              className="form-group"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '0.6rem 0.8rem',
-                borderRadius: '8px',
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                marginTop: '0.5rem',
-              }}
+            <label
+              className={`public-monitor-option${isPublic ? ' is-selected' : ''}`}
             >
               <input
                 type="checkbox"
                 id="isPublicMonitor"
+                aria-describedby="publicMonitorDescription"
+                className="public-monitor-checkbox"
                 checked={isPublic}
                 onChange={(e) => setIsPublic(e.target.checked)}
-                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
               />
-              <label
-                htmlFor="isPublicMonitor"
-                style={{
-                  fontSize: '0.85rem',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  margin: 0,
-                  userSelect: 'none',
-                  color: isPublic ? '#10b981' : 'var(--text-secondary, #d4d4d8)',
-                }}
-              >
-                🌐 Publish on Public Status Page (Showcase this service)
-              </label>
-            </div>
+              <span className="public-monitor-copy">
+                <span className="public-monitor-title">
+                  <Globe size={16} />
+                  Publish on Public Status Page
+                </span>
+                <span
+                  id="publicMonitorDescription"
+                  className="public-monitor-description"
+                >
+                  Showcase this service on your public status page.
+                </span>
+              </span>
+            </label>
           )}
 
           {/* Footer Actions */}
