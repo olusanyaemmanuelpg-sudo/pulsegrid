@@ -26,6 +26,8 @@ const toClientMonitor = (monitor) => {
   const { target, target_fingerprint, ...safeMonitor } = monitor;
   return {
     ...safeMonitor,
+    is_public: Boolean(monitor.is_public),
+    isPublic: Boolean(monitor.is_public),
     target: getMonitorTargetPreview(
       decryptMonitorTarget(target),
       monitor.type,
@@ -140,6 +142,8 @@ export const createMonitor = async (req, res) => {
   }
 
   const userId = req.user.id;
+  const isPublic =
+    req.user?.role === 'admin' ? Boolean(req.body?.isPublic) : false;
 
   try {
     const plaintextTarget = target.trim();
@@ -153,9 +157,9 @@ export const createMonitor = async (req, res) => {
       `
         INSERT INTO monitors (
           user_id, name, type, target, target_fingerprint,
-          check_interval, keyword, heartbeat_secret
+          check_interval, keyword, heartbeat_secret, is_public
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *;
       `,
       [
@@ -167,6 +171,7 @@ export const createMonitor = async (req, res) => {
         checkInterval,
         normalizedKeyword,
         heartbeatSecret,
+        isPublic,
       ],
     );
 
@@ -359,156 +364,6 @@ export const testMonitor = async (req, res) => {
   }
 };
 
-export const getPlatformCoreServices = async () => {
-  const now = Date.now();
-
-  // 1. Primary PostgreSQL Database probe
-  let dbStatus = 'up';
-  let dbLatency = 5;
-  try {
-    const start = performance.now();
-    await readQuery('SELECT 1;');
-    dbLatency = Math.max(1, Math.round(performance.now() - start));
-  } catch {
-    dbStatus = 'down';
-    dbLatency = 0;
-  }
-
-  // 2. Redis State & Cache probe
-  let redisStatus = 'up';
-  let redisLatency = 2;
-  try {
-    const start = performance.now();
-    await redis.ping();
-    redisLatency = Math.max(1, Math.round(performance.now() - start));
-  } catch {
-    redisStatus = 'down';
-    redisLatency = 0;
-  }
-
-  // 3. Prober Workers Fleet check
-  let workersStatus = 'up';
-  let workersLatency = 4;
-  let activeWorkersCount = 0;
-  try {
-    const workers = await getActiveWorkers();
-    activeWorkersCount = workers.length;
-    if (activeWorkersCount === 0 && process.env.NODE_ENV === 'production') {
-      workersStatus = 'degraded';
-    }
-  } catch {
-    workersStatus = 'degraded';
-  }
-
-  // 4. Edge API Cluster & Ingress
-  const apiStatus = 'up';
-  const apiLatency = 2;
-
-  const coreDefinitions = [
-    {
-      id: 'core-api',
-      name: 'PulseGrid Edge API & Ingress Gateway',
-      type: 'http',
-      status: apiStatus,
-      last_latency_ms: apiLatency,
-      check_interval: 30,
-      last_checked_at: new Date(now).toISOString(),
-      created_at: new Date(now - 86400000 * 30).toISOString(),
-      is_public: true,
-    },
-    {
-      id: 'core-postgres',
-      name: 'Primary Database (PostgreSQL Master)',
-      type: 'postgres',
-      status: dbStatus,
-      last_latency_ms: dbLatency,
-      check_interval: 30,
-      last_checked_at: new Date(now).toISOString(),
-      created_at: new Date(now - 86400000 * 30).toISOString(),
-      is_public: true,
-    },
-    {
-      id: 'core-redis',
-      name: 'Redis In-Memory State & Cache Engine',
-      type: 'redis',
-      status: redisStatus,
-      last_latency_ms: redisLatency,
-      check_interval: 30,
-      last_checked_at: new Date(now).toISOString(),
-      created_at: new Date(now - 86400000 * 30).toISOString(),
-      is_public: true,
-    },
-    {
-      id: 'core-workers',
-      name: 'Distributed Prober Consensus Fleet',
-      type: 'cron',
-      status: workersStatus,
-      last_latency_ms: workersLatency,
-      check_interval: 30,
-      last_checked_at: new Date(now).toISOString(),
-      created_at: new Date(now - 86400000 * 30).toISOString(),
-      is_public: true,
-    },
-  ];
-
-  // Fetch or maintain recent check history for each core service in Redis
-  try {
-    const pipeline = redis.pipeline();
-    coreDefinitions.forEach((def) => {
-      const checkItem = {
-        status: def.status,
-        latency_ms: def.last_latency_ms,
-        created_at: def.last_checked_at,
-      };
-      pipeline.lpush(`platform:health:${def.id}:checks`, JSON.stringify(checkItem));
-      pipeline.ltrim(`platform:health:${def.id}:checks`, 0, 29);
-      pipeline.lrange(`platform:health:${def.id}:checks`, 0, 29);
-    });
-
-    const results = await pipeline.exec();
-
-    return coreDefinitions.map((def, idx) => {
-      const lrangeIndex = idx * 3 + 2;
-      const rawItems = results?.[lrangeIndex]?.[1] || [];
-      let checks = [];
-      if (Array.isArray(rawItems) && rawItems.length > 0) {
-        checks = rawItems
-          .map((r) => {
-            try {
-              return JSON.parse(r);
-            } catch {
-              return null;
-            }
-          })
-          .filter(Boolean);
-      }
-
-      while (checks.length < 30) {
-        const pastTime = new Date(now - checks.length * 30000).toISOString();
-        checks.push({
-          status: def.status === 'down' ? 'down' : 'up',
-          latency_ms: def.last_latency_ms || 5,
-          created_at: pastTime,
-        });
-      }
-
-      return {
-        ...def,
-        recent_checks: checks.slice(0, 30),
-      };
-    });
-  } catch {
-    return coreDefinitions.map((def) => ({
-      ...def,
-      recent_checks: Array.from({ length: 30 }, (_, i) => ({
-        status: def.status === 'down' ? 'down' : 'up',
-        latency_ms: def.last_latency_ms || 5,
-        created_at: new Date(now - i * 30000).toISOString(),
-      })),
-    }));
-  }
-};
-
 export const getPublicStatus = async (req, res) => {
   try {
     // 1. Fetch platform system status mode and announcement
@@ -573,11 +428,8 @@ export const getPublicStatus = async (req, res) => {
       // Fall back if incidents table not ready
     }
 
-    // 3. Fetch PulseGrid's own Core Infrastructure Services
-    const coreServices = await getPlatformCoreServices();
-
-    // 4. Fetch any additional monitors explicitly made public by administrator (is_public = true)
-    let adminPublicRows = [];
+    // 3. Fetch ONLY genuine monitors explicitly marked as public (is_public = true)
+    let publicMonitors = [];
     try {
       const dbRes = await readQuery(`
         SELECT 
@@ -594,43 +446,42 @@ export const getPublicStatus = async (req, res) => {
         WHERE m.is_public = true
         ORDER BY m.created_at ASC;
       `);
-      adminPublicRows = dbRes.rows;
-    } catch {
-      // Fall back if table query fails
-    }
+      const adminPublicRows = dbRes.rows;
 
-    let publicMonitors = [...coreServices];
-
-    if (adminPublicRows.length > 0) {
-      try {
+      if (adminPublicRows.length > 0) {
         const pipeline = redis.pipeline();
         adminPublicRows.forEach((m) => pipeline.lrange(`monitor:${m.id}:checks`, 0, 29));
         const redisResults = await pipeline.exec();
 
-        const enrichedAdminRows = await Promise.all(
+        publicMonitors = await Promise.all(
           adminPublicRows.map(async (mon, idx) => {
             const [err, rawChecks] = redisResults?.[idx] || [];
             const checks = await resolveMonitorRecentChecks(mon, rawChecks, err);
             return {
               ...mon,
+              isPublic: true,
               recent_checks: checks,
             };
           }),
         );
-        publicMonitors = [...publicMonitors, ...enrichedAdminRows];
-      } catch {}
+      }
+    } catch (dbErr) {
+      console.warn('Failed to query public monitors:', dbErr.message);
     }
 
-    // 5. Calculate effective system status based on platform services
+    // 4. Calculate effective system status based on genuine platform services and incidents
     if (systemStatus.mode === 'auto') {
       const downCount = publicMonitors.filter((m) => m.status === 'down').length;
       const degradedCount = publicMonitors.filter((m) => m.status === 'degraded').length;
 
-      if (downCount > 0 && downCount === publicMonitors.length) {
+      if (
+        activeIncidents.some((inc) => inc.severity === 'critical') ||
+        (publicMonitors.length > 0 && downCount === publicMonitors.length)
+      ) {
         systemStatus.effectiveStatus = 'major_outage';
-      } else if (downCount > 0) {
+      } else if (downCount > 0 || activeIncidents.some((inc) => inc.severity === 'major')) {
         systemStatus.effectiveStatus = 'partial_outage';
-      } else if (degradedCount > 0) {
+      } else if (degradedCount > 0 || activeIncidents.length > 0) {
         systemStatus.effectiveStatus = 'degraded';
       } else {
         systemStatus.effectiveStatus = 'operational';

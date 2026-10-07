@@ -266,20 +266,35 @@ export const StatusPage = () => {
         </div>
       )}
 
-      {/* Core Services List Section */}
+      {/* Monitored Services List Section */}
       <div className="status-section">
         <div className="status-section-header">
-          <h2>Core Services & Infrastructure</h2>
+          <h2>Services & Infrastructure</h2>
           <span className="uptime-pill">
             <Radio size={12} style={{ color: '#10b981', marginRight: '4px' }} />
-            Consensus Monitored
+            Live Telemetry
           </span>
         </div>
 
         <div className="status-services-list">
           {displayServices.length === 0 ? (
-            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted, #71717a)' }}>
-              No public services are currently configured on the status page.
+            <div
+              style={{
+                padding: '3rem 2rem',
+                textAlign: 'center',
+                background: 'var(--bg-card, #18181b)',
+                borderRadius: '12px',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                color: 'var(--text-muted, #71717a)',
+              }}
+            >
+              <CheckCircle size={32} style={{ color: '#10b981', marginBottom: '0.75rem', opacity: 0.8 }} />
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-primary, #f4f4f5)', marginBottom: '0.35rem' }}>
+                All Systems Operational
+              </h3>
+              <p style={{ fontSize: '0.875rem', maxWidth: '440px', margin: '0 auto', lineHeight: 1.5 }}>
+                Prober network and alert dispatchers are active. No public service endpoints are currently showcased on this page.
+              </p>
             </div>
           ) : (
             displayServices.map((mon) => {
