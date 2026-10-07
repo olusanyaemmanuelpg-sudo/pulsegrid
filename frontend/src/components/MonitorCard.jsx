@@ -25,7 +25,6 @@ const getPublicApiBaseUrl = () => {
   if (import.meta.env.DEV) {
     return 'http://localhost:3000';
   }
-
   if (typeof window !== 'undefined' && window.location?.origin) {
     return window.location.origin;
   }
